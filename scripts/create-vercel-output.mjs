@@ -4,7 +4,9 @@ import { resolve, join } from 'node:path';
 const distDir = resolve('dist');
 const vercelOutputDir = process.env.VERCEL_OUTPUT_DIR
   ? process.env.VERCEL_OUTPUT_DIR
-  : resolve('.vercel', 'output');
+  : process.env.VERCEL
+    ? '/vercel/output'
+    : resolve('.vercel', 'output');
 const vercelStaticDir = join(vercelOutputDir, 'static');
 
 if (!existsSync(distDir)) {
