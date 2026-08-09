@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { api } from '../../services/api';
 import { Terminal, Code2, Cpu, ArrowRight, ShieldCheck, Key, Mail, User, ShieldAlert } from 'lucide-react';
 import './AuthView.css';
 
 export const AuthView: React.FC = () => {
   const { login, register, finalizeLogin } = useAuth();
+  const { success, error: showError } = useToast();
   
   const [viewMode, setViewMode] = useState<'login' | 'register' | 'otp'>('login');
   
@@ -13,8 +15,6 @@ export const AuthView: React.FC = () => {
   const [otpCode, setOtpCode] = useState('');
   
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const [resendTimer, setResendTimer] = useState(0);
 
@@ -29,27 +29,25 @@ export const AuthView: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setError(null);
-    setSuccessMsg(null);
     
     try {
       if (viewMode === 'login') {
         await login({ username: formData.username, password: formData.password });
+        success("Welcome back to Code Realm!");
       } else if (viewMode === 'register') {
         await register(formData);
         setViewMode('otp');
-        setSuccessMsg("Registration successful! Check your email for the OTP.");
+        success("Registration successful! Check your email for the OTP.");
         setResendTimer(60);
       }
     } catch (err: any) {
-      // If login failed because account is not verified, they get a 403 with a specific detail object
       if (err.detail && err.detail.message === "Account not verified") {
         setFormData(prev => ({ ...prev, email: err.detail.email || formData.email }));
         setViewMode('otp');
-        setError("Your account is not verified. A new OTP has been sent to your email.");
+        showError("Your account is not verified. A new OTP has been sent to your email.");
         setResendTimer(60);
       } else {
-        setError(err.message || err.detail || 'Authentication failed');
+        showError(err.message || err.detail || 'Authentication failed');
       }
     } finally {
       setIsLoading(false);
@@ -59,12 +57,12 @@ export const AuthView: React.FC = () => {
   const handleOtpVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setError(null);
     try {
       const tokens = await api.verifyOtp(formData.email, otpCode);
       await finalizeLogin(tokens);
+      success("Identity verified! Entering the realm...");
     } catch (err: any) {
-      setError(err.message || 'OTP verification failed');
+      showError(err.message || 'OTP verification failed');
     } finally {
       setIsLoading(false);
     }
@@ -73,14 +71,12 @@ export const AuthView: React.FC = () => {
   const handleResendOtp = async () => {
     if (resendTimer > 0) return;
     setIsLoading(true);
-    setError(null);
-    setSuccessMsg(null);
     try {
       await api.resendOtp(formData.email);
-      setSuccessMsg("A new code has been sent to your email.");
+      success("A new code has been sent to your email.");
       setResendTimer(60);
     } catch (err: any) {
-      setError(err.message || 'Failed to resend OTP');
+      showError(err.message || 'Failed to resend OTP');
     } finally {
       setIsLoading(false);
     }
@@ -109,10 +105,7 @@ export const AuthView: React.FC = () => {
             We sent a 6-digit code to <strong>{formData.email}</strong>.
           </p>
 
-          {error && <div className="auth-error">{error}</div>}
-          {successMsg && <div className="auth-success" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#6ee7b7', padding: '12px', borderRadius: '4px', marginBottom: '16px', fontSize: '13px' }}>{successMsg}</div>}
-
-          <div className="input-group">
+          <div className="input-group" style={{ marginTop: '24px' }}>
             <label>Security Code</label>
             <div className="input-wrapper">
               <ShieldAlert size={18} className="input-icon" />
@@ -145,7 +138,7 @@ export const AuthView: React.FC = () => {
           <div style={{ textAlign: 'center', marginTop: '16px' }}>
             <button 
               type="button" 
-              onClick={() => { setViewMode('login'); setError(null); setSuccessMsg(null); }}
+              onClick={() => { setViewMode('login'); }}
               style={{ background: 'none', border: 'none', color: 'var(--accent-primary)', fontSize: '13px', cursor: 'pointer' }}
             >
               Back to Login
@@ -160,13 +153,13 @@ export const AuthView: React.FC = () => {
         <div className="auth-tabs">
           <button 
             className={`auth-tab ${viewMode === 'login' ? 'active' : ''}`}
-            onClick={() => { setViewMode('login'); setError(null); setSuccessMsg(null); }}
+            onClick={() => { setViewMode('login'); }}
           >
             Sign In
           </button>
           <button 
             className={`auth-tab ${viewMode === 'register' ? 'active' : ''}`}
-            onClick={() => { setViewMode('register'); setError(null); setSuccessMsg(null); }}
+            onClick={() => { setViewMode('register'); }}
           >
             Create Account
           </button>
@@ -178,9 +171,7 @@ export const AuthView: React.FC = () => {
             {viewMode === 'login' ? 'Enter your credentials to continue your journey.' : 'Register to start your coding adventure.'}
           </p>
 
-          {error && <div className="auth-error">{error}</div>}
-
-          <div className="input-group">
+          <div className="input-group" style={{ marginTop: '24px' }}>
             <label>Username</label>
             <div className="input-wrapper">
               <User size={18} className="input-icon" />

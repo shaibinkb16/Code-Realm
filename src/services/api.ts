@@ -118,6 +118,9 @@ class ApiClient {
     });
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
+      if (Array.isArray(errorData.detail)) {
+        throw new Error(errorData.detail.map((e: any) => e.msg).join(", "));
+      }
       throw new Error(errorData.detail || 'Registration failed');
     }
     return await res.json();
