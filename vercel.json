@@ -1,17 +1,14 @@
 {
   "version": 2,
-  "framework": "vite",
   "services": {
     "frontend": {
       "root": ".",
       "framework": "vite",
-      "buildCommand": "npm run build",
+      "installCommand": "npm install",
+      "buildCommand": "npm run build && mkdir -p .vercel/output/static && cp -R dist/. .vercel/output/static/",
       "outputDirectory": "dist"
     }
   },
-  "buildCommand": "npm run build",
-  "installCommand": "npm install",
-  "outputDirectory": "dist",
   "rewrites": [
     {
       "source": "/(.*)",
