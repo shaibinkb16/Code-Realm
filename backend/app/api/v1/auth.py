@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status, HTTPException
+from fastapi import APIRouter, Depends, status, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
@@ -16,8 +16,8 @@ from app.api.deps import get_current_user, RateLimiter
 
 router = APIRouter()
 
-async def _generate_and_send_otp(email: str):
-    """Generates a 6-digit OTP, stores it in Redis for 5 minutes, and sends the email."""
+async def _generate_and_send_otp(email: str, background_tasks: BackgroundTasks):
+    """Generates a 6-digit OTP, stores it in Redis for 5 minutes, and sends the email in the background."""
     if not redis_manager.redis_client:
         # Fallback for dev environments without Redis
         otp = "123456"
@@ -25,11 +25,11 @@ async def _generate_and_send_otp(email: str):
         otp = "".join(random.choices(string.digits, k=6))
         await redis_manager.redis_client.setex(f"otp:{email}", 300, otp)
     
-    send_otp_email(email, otp)
+    background_tasks.add_task(send_otp_email, email, otp)
     return otp
 
 @router.post("/register", response_model=dict, status_code=201, dependencies=[Depends(RateLimiter(5, 3600))])
-async def register_user(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
+async def register_user(user_in: UserCreate, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     """Registers a new user (inactive until OTP verification)."""
     res = await db.execute(select(User).where(User.email == user_in.email))
     if res.scalars().first():
@@ -56,12 +56,12 @@ async def register_user(user_in: UserCreate, db: AsyncSession = Depends(get_db))
     db.add(skills)
     await db.commit()
     
-    await _generate_and_send_otp(user_in.email)
+    await _generate_and_send_otp(user_in.email, background_tasks)
     
     return {"message": "User registered. OTP sent to email.", "email": user_in.email}
 
 @router.post("/login", response_model=Token, dependencies=[Depends(RateLimiter(5, 60))])
-async def login(credentials: UserLogin, db: AsyncSession = Depends(get_db)):
+async def login(credentials: UserLogin, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     """Authenticates credentials against Argon2id hash. Rejects if not verified."""
     res = await db.execute(select(User).where(User.username == credentials.username))
     user = res.scalars().first()
@@ -71,7 +71,7 @@ async def login(credentials: UserLogin, db: AsyncSession = Depends(get_db)):
         
     if not user.is_active:
         # Generate new OTP automatically when they try to log in unverified
-        await _generate_and_send_otp(user.email)
+        await _generate_and_send_otp(user.email, background_tasks)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, 
             detail={"message": "Account not verified", "email": user.email}
@@ -109,7 +109,7 @@ async def verify_otp(request: OTPVerifyRequest, db: AsyncSession = Depends(get_d
     return Token(access_token=access_token, refresh_token=refresh_token)
 
 @router.post("/resend-otp", response_model=dict, dependencies=[Depends(RateLimiter(3, 3600))])
-async def resend_otp(request: OTPResendRequest, db: AsyncSession = Depends(get_db)):
+async def resend_otp(request: OTPResendRequest, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     res = await db.execute(select(User).where(User.email == request.email))
     user = res.scalars().first()
     if not user:
@@ -119,7 +119,7 @@ async def resend_otp(request: OTPResendRequest, db: AsyncSession = Depends(get_d
     if user.is_active:
         raise ValidationError("Account is already verified.")
         
-    await _generate_and_send_otp(request.email)
+    await _generate_and_send_otp(request.email, background_tasks)
     return {"message": "If the email is registered, an OTP was sent."}
 
 @router.post("/refresh", response_model=Token)

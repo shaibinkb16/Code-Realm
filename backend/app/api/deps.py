@@ -17,11 +17,13 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db)
 ) -> User:
     """Dependency that extracts and verifies JWT bearer token to return authenticated User."""
+    import uuid
     try:
         payload = decode_token(token)
-        user_id: str = payload.get("sub")
-        if user_id is None:
+        user_id_str: str = payload.get("sub")
+        if user_id_str is None:
             raise AuthenticationError("Invalid authentication token payload.")
+        user_id = uuid.UUID(user_id_str)
     except Exception:
         raise AuthenticationError("Could not validate credentials.")
 

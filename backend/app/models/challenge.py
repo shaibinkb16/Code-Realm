@@ -1,7 +1,7 @@
 import uuid
 from sqlalchemy import Column, String, Integer, Boolean, Text, ForeignKey, JSON
 from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Uuid as UUID
 from app.core.database import Base
 
 class Realm(Base):
