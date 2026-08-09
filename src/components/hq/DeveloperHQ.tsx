@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
+import { API_BASE_URL } from '../../services/api';
 import { AchievementGallery } from './AchievementGallery';
 import type { Achievement } from '../../types/game';
 import {
@@ -8,7 +9,7 @@ import {
   Zap, Building, Brain
 } from 'lucide-react';
 
-const API_BASE = 'http://localhost:8000/api/v1';
+const API_BASE = API_BASE_URL;
 
 const HQ_TIERS = [
   { name: 'Room',          buildings: 0, cost: 0,    desc: 'A humble coding corner.' },

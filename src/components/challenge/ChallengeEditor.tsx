@@ -57,7 +57,9 @@ interface ExecutionResult {
   test_results: TestResult[];
 }
 
-const API_BASE = 'http://localhost:8000/api/v1';
+import { API_BASE_URL } from '../../services/api';
+
+const API_BASE = API_BASE_URL;
 
 export const ChallengeEditor: React.FC = () => {
   const { activeNode, setActiveTab, completeChallenge, profile } = useGame();

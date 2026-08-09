@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { GitHubIntegration } from './GitHubIntegration';
+import { API_BASE_URL } from '../../services/api';
 import { Briefcase, Building2, Video, Send, Loader, RefreshCw } from 'lucide-react';
 
-const API_BASE = 'http://localhost:8000/api/v1';
+const API_BASE = API_BASE_URL;
 
 interface CareerPath {
   id: string;

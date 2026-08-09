@@ -1,4 +1,10 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+// Resolve API base URL with environment override. Defaults to localhost during
+// local development, and to the deployed backend in production.
+const DEFAULT_API = (typeof window !== 'undefined' && window.location.hostname === 'localhost')
+  ? 'http://localhost:8000/api/v1'
+  : 'https://code-realm.onrender.com/api/v1';
+
+export const API_BASE_URL = import.meta.env.VITE_API_URL || DEFAULT_API;
 
 class ApiClient {
   private getHeaders(): HeadersInit {

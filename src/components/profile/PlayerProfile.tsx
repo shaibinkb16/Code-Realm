@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
+import { API_BASE_URL } from '../../services/api';
 import { Loader } from 'lucide-react';
 
-const API_BASE = 'http://localhost:8000/api/v1';
+const API_BASE = API_BASE_URL;
 
 export const PlayerProfileView: React.FC = () => {
   const { profile } = useGame();
