@@ -15,7 +15,7 @@ class Settings(BaseSettings):
         env="SECRET_KEY"
     )
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 1 day
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15  # 15 minutes
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # CORS
@@ -55,6 +55,13 @@ class Settings(BaseSettings):
 
     # AI Model Integration
     AI_API_KEY: str = Field(default="", env="AI_API_KEY")
+
+    # SMTP / Email Configuration
+    SMTP_HOST: str = Field(default="smtp.gmail.com", env="SMTP_HOST")
+    SMTP_PORT: int = Field(default=587, env="SMTP_PORT")
+    SMTP_USER: str = Field(default="", env="SMTP_USER")
+    SMTP_PASS: str = Field(default="", env="SMTP_PASS")
+    SMTP_FROM: str = Field(default="noreply@coderealm.dev", env="SMTP_FROM")
 
     class Config:
         case_sensitive = True

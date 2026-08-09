@@ -12,7 +12,18 @@ class UserLogin(BaseModel):
 
 class Token(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+class OTPVerifyRequest(BaseModel):
+    email: EmailStr
+    otp: str = Field(..., min_length=6, max_length=6)
+
+class OTPResendRequest(BaseModel):
+    email: EmailStr
 
 class UserProfileResponse(BaseModel):
     title: str

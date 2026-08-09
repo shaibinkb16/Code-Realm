@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -33,3 +33,30 @@ async def get_current_user(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user.")
     
     return user
+
+from app.core.redis import redis_manager
+
+class RateLimiter:
+    def __init__(self, requests: int, window_seconds: int):
+        self.requests = requests
+        self.window_seconds = window_seconds
+
+    async def __call__(self, request: Request):
+        if not redis_manager.redis_client:
+            return  # Skip if Redis is not connected (e.g. during some tests)
+            
+        client_ip = request.client.host if request.client else "unknown"
+        path = request.url.path
+        key = f"rate_limit:{path}:{client_ip}"
+        
+        current = await redis_manager.redis_client.get(key)
+        if current and int(current) >= self.requests:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many requests. Please try again later."
+            )
+            
+        pipe = redis_manager.redis_client.pipeline()
+        pipe.incr(key, 1)
+        pipe.expire(key, self.window_seconds)
+        await pipe.execute()

@@ -12,11 +12,51 @@ class ApiClient {
     return headers;
   }
 
+  private async fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
+    options.headers = this.getHeaders();
+    let res = await fetch(url, options);
+
+    if (res.status === 401) {
+      // Attempt to refresh token
+      const refreshToken = localStorage.getItem('coderealm_refresh_token');
+      if (refreshToken) {
+        try {
+          const refreshRes = await fetch(`${API_BASE_URL}/auth/refresh`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refresh_token: refreshToken })
+          });
+          
+          if (refreshRes.ok) {
+            const data = await refreshRes.json();
+            localStorage.setItem('coderealm_token', data.access_token);
+            if (data.refresh_token) {
+              localStorage.setItem('coderealm_refresh_token', data.refresh_token);
+            }
+            
+            // Retry original request with new token
+            options.headers = this.getHeaders();
+            res = await fetch(url, options);
+          } else {
+            // Refresh failed, clear session
+            localStorage.removeItem('coderealm_token');
+            localStorage.removeItem('coderealm_refresh_token');
+          }
+        } catch (e) {
+          localStorage.removeItem('coderealm_token');
+          localStorage.removeItem('coderealm_refresh_token');
+        }
+      } else {
+        localStorage.removeItem('coderealm_token');
+      }
+    }
+    return res;
+  }
+
   async runCode(challengeId: string, code: string, language: string = 'python') {
     try {
-      const res = await fetch(`${API_BASE_URL}/execute/run`, {
+      const res = await this.fetchWithAuth(`${API_BASE_URL}/execute/run`, {
         method: 'POST',
-        headers: this.getHeaders(),
         body: JSON.stringify({ challenge_id: challengeId, code, language })
       });
       if (!res.ok) throw new Error('Sandbox execution failed');
@@ -29,9 +69,8 @@ class ApiClient {
 
   async submitCode(challengeId: string, code: string, language: string = 'python') {
     try {
-      const res = await fetch(`${API_BASE_URL}/execute/submit`, {
+      const res = await this.fetchWithAuth(`${API_BASE_URL}/execute/submit`, {
         method: 'POST',
-        headers: this.getHeaders(),
         body: JSON.stringify({ challenge_id: challengeId, code, language })
       });
       if (!res.ok) throw new Error('Submission endpoint failed');
@@ -44,9 +83,8 @@ class ApiClient {
 
   async askAiMentor(message: string, mode: string = 'Explain', skillRating: number = 905) {
     try {
-      const res = await fetch(`${API_BASE_URL}/ai/mentor/chat`, {
+      const res = await this.fetchWithAuth(`${API_BASE_URL}/ai/mentor/chat`, {
         method: 'POST',
-        headers: this.getHeaders(),
         body: JSON.stringify({ message, mode, skill_rating: skillRating })
       });
       if (!res.ok) throw new Error('AI Mentor service unavailable');
@@ -66,7 +104,8 @@ class ApiClient {
     });
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.detail || 'Login failed');
+      // Pass the whole error object so we can check if it's the "Account not verified" error
+      throw errorData; 
     }
     return await res.json();
   }
@@ -84,10 +123,35 @@ class ApiClient {
     return await res.json();
   }
 
+  async verifyOtp(email: string, otp: string) {
+    const res = await fetch(`${API_BASE_URL}/auth/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp })
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.detail || 'Invalid or expired OTP');
+    }
+    return await res.json();
+  }
+
+  async resendOtp(email: string) {
+    const res = await fetch(`${API_BASE_URL}/auth/resend-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.detail || 'Failed to resend OTP');
+    }
+    return await res.json();
+  }
+
   async getMe() {
-    const res = await fetch(`${API_BASE_URL}/auth/me`, {
-      method: 'GET',
-      headers: this.getHeaders()
+    const res = await this.fetchWithAuth(`${API_BASE_URL}/auth/me`, {
+      method: 'GET'
     });
     if (!res.ok) throw new Error('Session expired');
     return await res.json();

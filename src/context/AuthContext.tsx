@@ -7,6 +7,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (credentials: any) => Promise<void>;
   register: (userData: any) => Promise<void>;
+  finalizeLogin: (tokens: { access_token: string, refresh_token: string }) => Promise<void>;
   logout: () => void;
 }
 
@@ -26,6 +27,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch (error) {
       console.warn("Session invalid or expired", error);
       localStorage.removeItem('coderealm_token');
+      localStorage.removeItem('coderealm_refresh_token');
       setUser(null);
     } finally {
       setIsLoading(false);
@@ -37,24 +39,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const login = async (credentials: any) => {
+    // This will throw if the account is not verified, which AuthView handles.
     const res = await api.login(credentials);
-    localStorage.setItem('coderealm_token', res.access_token);
-    await fetchUser();
+    await finalizeLogin(res);
   };
 
   const register = async (userData: any) => {
     await api.register(userData);
-    // After registration, login automatically
-    await login({ username: userData.username, password: userData.password });
+    // After registration, AuthView will handle the OTP transition.
+  };
+
+  const finalizeLogin = async (tokens: { access_token: string, refresh_token: string }) => {
+    localStorage.setItem('coderealm_token', tokens.access_token);
+    if (tokens.refresh_token) {
+      localStorage.setItem('coderealm_refresh_token', tokens.refresh_token);
+    }
+    await fetchUser();
   };
 
   const logout = () => {
     localStorage.removeItem('coderealm_token');
+    localStorage.removeItem('coderealm_refresh_token');
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, register, finalizeLogin, logout }}>
       {children}
     </AuthContext.Provider>
   );
