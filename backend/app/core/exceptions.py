@@ -42,14 +42,8 @@ async def global_exception_handler(request: Request, exc: Exception):
             }
         )
     
-    logger.error(f"Unhandled Exception on {request.url.path}: {str(exc)}", exc_info=True)
+    logger.error(f"Unhandled Exception: {str(exc)}", exc_info=True)
     return JSONResponse(
         status_code=500,
-        content={
-            "error": {
-                "code": "INTERNAL_SERVER_ERROR",
-                "message": "An unexpected server error occurred.",
-                "path": request.url.path
-            }
-        }
+        content={"error": {"code": "INTERNAL_SERVER_ERROR", "message": str(exc), "path": request.url.path}}
     )
