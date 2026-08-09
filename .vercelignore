@@ -1,0 +1,6 @@
+backend
+.github
+.agents
+docs
+scripts
+docker-compose.yml

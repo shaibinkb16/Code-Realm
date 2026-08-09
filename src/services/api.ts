@@ -55,6 +55,43 @@ class ApiClient {
       return null;
     }
   }
+
+  // --- Auth Methods ---
+  
+  async login(credentials: any) {
+    const res = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(credentials)
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.detail || 'Login failed');
+    }
+    return await res.json();
+  }
+
+  async register(userData: any) {
+    const res = await fetch(`${API_BASE_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(userData)
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.detail || 'Registration failed');
+    }
+    return await res.json();
+  }
+
+  async getMe() {
+    const res = await fetch(`${API_BASE_URL}/auth/me`, {
+      method: 'GET',
+      headers: this.getHeaders()
+    });
+    if (!res.ok) throw new Error('Session expired');
+    return await res.json();
+  }
 }
 
 export const api = new ApiClient();

@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { GameProvider, useGame } from './context/GameContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthView } from './components/auth/AuthView';
 import { Sidebar } from './components/layout/Sidebar';
 import { HeaderBar } from './components/layout/HeaderBar';
 import { AICompanionModal } from './components/layout/AICompanionModal';
@@ -84,11 +86,36 @@ const MainAppContent: React.FC = () => {
   );
 };
 
-export function App() {
+const AppContent: React.FC = () => {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-main)', color: 'var(--text-muted)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+          <div className="spinner" style={{ width: '32px', height: '32px', borderTopColor: 'var(--accent-primary)' }}></div>
+          <div>Initializing Code Realm...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthView />;
+  }
+
   return (
     <GameProvider>
       <MainAppContent />
     </GameProvider>
+  );
+};
+
+export function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 

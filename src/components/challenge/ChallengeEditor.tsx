@@ -13,8 +13,7 @@ import {
   Zap,
   Loader,
   X,
-  MessageSquare,
-  Star
+  MessageSquare
 } from 'lucide-react';
 
 interface AITestCase {
