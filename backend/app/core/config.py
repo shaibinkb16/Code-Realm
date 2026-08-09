@@ -1,0 +1,57 @@
+import os
+from typing import List
+from pydantic_settings import BaseSettings
+from pydantic import Field
+
+class Settings(BaseSettings):
+    PROJECT_NAME: str = "CODE REALM API"
+    VERSION: str = "1.0.0"
+    API_V1_STR: str = "/api/v1"
+    ENVIRONMENT: str = Field(default="development", env="ENVIRONMENT")
+
+    # Security & Tokens
+    SECRET_KEY: str = Field(
+        default="09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7",
+        env="SECRET_KEY"
+    )
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 1 day
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    # CORS
+    CORS_ORIGINS: List[str] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000"
+    ]
+
+    # Relational Database (PostgreSQL)
+    POSTGRES_USER: str = Field(default="coderealm", env="POSTGRES_USER")
+    POSTGRES_PASSWORD: str = Field(default="coderealm_secret_pwd", env="POSTGRES_PASSWORD")
+    POSTGRES_SERVER: str = Field(default="localhost", env="POSTGRES_SERVER")
+    POSTGRES_PORT: str = Field(default="5432", env="POSTGRES_PORT")
+    POSTGRES_DB: str = Field(default="coderealm_db", env="POSTGRES_DB")
+
+    @property
+    def ASYNC_DATABASE_URI(self) -> str:
+        return (
+            f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
+            f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        )
+
+    # Redis Cache & Rate Limiting
+    REDIS_HOST: str = Field(default="localhost", env="REDIS_HOST")
+    REDIS_PORT: int = Field(default=6379, env="REDIS_PORT")
+
+    @property
+    def REDIS_URI(self) -> str:
+        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/0"
+
+    # AI Model Integration
+    AI_API_KEY: str = Field(default="", env="AI_API_KEY")
+
+    class Config:
+        case_sensitive = True
+        env_file = ".env"
+
+settings = Settings()
