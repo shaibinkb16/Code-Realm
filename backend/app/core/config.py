@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     ]
 
     # Relational Database (PostgreSQL)
+    DATABASE_URL: str | None = Field(default=None, env="DATABASE_URL")
     POSTGRES_USER: str = Field(default="coderealm", env="POSTGRES_USER")
     POSTGRES_PASSWORD: str = Field(default="coderealm_secret_pwd", env="POSTGRES_PASSWORD")
     POSTGRES_SERVER: str = Field(default="localhost", env="POSTGRES_SERVER")
@@ -34,17 +35,22 @@ class Settings(BaseSettings):
 
     @property
     def ASYNC_DATABASE_URI(self) -> str:
+        if self.DATABASE_URL:
+            return self.DATABASE_URL.replace("postgres://", "postgresql+asyncpg://").replace("postgresql://", "postgresql+asyncpg://")
         return (
             f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
             f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         )
 
     # Redis Cache & Rate Limiting
+    REDIS_URL: str | None = Field(default=None, env="REDIS_URL")
     REDIS_HOST: str = Field(default="localhost", env="REDIS_HOST")
     REDIS_PORT: int = Field(default=6379, env="REDIS_PORT")
 
     @property
     def REDIS_URI(self) -> str:
+        if self.REDIS_URL:
+            return self.REDIS_URL
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/0"
 
     # AI Model Integration

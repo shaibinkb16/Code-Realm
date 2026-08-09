@@ -1,0 +1,39 @@
+services:
+  # 1. FastAPI Web Service
+  - type: web
+    name: code-realm-backend
+    env: docker
+    rootDir: backend
+    plan: free
+    healthCheckPath: /api/v1/health
+    preDeployCommand: python scripts/migrate_db.py
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: code-realm-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: code-realm-redis
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: AI_API_KEY
+        sync: false
+
+  # 2. Redis Cache
+  - type: redis
+    name: code-realm-redis
+    plan: free
+    ipAllowList: []
+
+databases:
+  # 3. PostgreSQL Database
+  - name: code-realm-db
+    plan: free
+    databaseName: coderealm_db
+    user: coderealm
+    ipAllowList: []
