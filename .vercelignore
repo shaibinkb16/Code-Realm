@@ -2,6 +2,6 @@ backend
 .github
 .agents
 docs
-scripts
+scripts/*
 !scripts/create-vercel-output.mjs
 docker-compose.yml
