@@ -1,8 +1,11 @@
 import { existsSync, mkdirSync, rmSync, cpSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, join } from 'node:path';
 
 const distDir = resolve('dist');
-const vercelStaticDir = resolve('.vercel', 'output', 'static');
+const vercelOutputDir = process.env.VERCEL_OUTPUT_DIR
+  ? process.env.VERCEL_OUTPUT_DIR
+  : resolve('.vercel', 'output');
+const vercelStaticDir = join(vercelOutputDir, 'static');
 
 if (!existsSync(distDir)) {
   console.warn('[vercel-output] dist directory not found; skipping output staging.');
@@ -14,4 +17,4 @@ rmSync(vercelStaticDir, { recursive: true, force: true });
 mkdirSync(vercelStaticDir, { recursive: true });
 cpSync(distDir, vercelStaticDir, { recursive: true });
 
-console.log('[vercel-output] staged dist to .vercel/output/static');
+console.log(`[vercel-output] staged dist to ${vercelStaticDir}`);
