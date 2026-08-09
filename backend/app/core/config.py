@@ -25,6 +25,13 @@ class Settings(BaseSettings):
         "http://localhost:3000"
     ]
 
+    # Add your deployed frontend origin(s) here so browsers can call the API.
+    # For example, the Vercel production alias used by the frontend:
+    # https://code-realm-frontend.vercel.app
+    CORS_ORIGINS: List[str] = CORS_ORIGINS + [
+        "https://code-realm-frontend.vercel.app",
+    ]
+
     # Relational Database (PostgreSQL)
     DATABASE_URL: str | None = Field(default=None, env="DATABASE_URL")
     POSTGRES_USER: str = Field(default="coderealm", env="POSTGRES_USER")
@@ -68,3 +75,11 @@ class Settings(BaseSettings):
         env_file = "../.env"
 
 settings = Settings()
+
+# Allow overriding CORS origins via a comma-separated env var 'CORS_ORIGINS'.
+# Useful for runtime environments (Render, Vercel) where setting list
+# environment variables as JSON is inconvenient.
+env_cors = os.getenv("CORS_ORIGINS")
+if env_cors:
+    # split on commas and strip whitespace
+    settings.CORS_ORIGINS = [o.strip() for o in env_cors.split(",") if o.strip()]
