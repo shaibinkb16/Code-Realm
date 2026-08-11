@@ -339,13 +339,26 @@ export const ChallengeEditor: React.FC = () => {
                 border: `1px solid ${result ? (result.passed ? 'var(--success)' : 'var(--error)') : 'var(--border-subtle)'}`,
                 padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-2)', fontSize: '13px'
               }}>
-                <div style={{ fontWeight: 600, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ fontWeight: 600, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   {result ? (result.passed ? <CheckCircle size={14} color="var(--success)" /> : <XCircle size={14} color="var(--error)" />) : <span style={{ width: 14, height: 14, borderRadius: '50%', background: 'var(--border-bright)' }} />}
                   {tc.description || `Test ${idx + 1}`}
                 </div>
-                {tc.input && <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>In: {tc.input}</div>}
-                <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-main)' }}>Out: {tc.expectedOutput}</div>
-                {result && !result.passed && <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--error)', marginTop: '4px' }}>Got: {result.actual_output}</div>}
+                {tc.input && (
+                  <div style={{ marginBottom: '6px' }}>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px', textTransform: 'uppercase' }}>Input</div>
+                    <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', background: 'var(--bg-surface)', padding: '6px 8px', borderRadius: '4px', whiteSpace: 'pre-wrap', border: '1px solid var(--border-subtle)' }}>{tc.input}</div>
+                  </div>
+                )}
+                <div style={{ marginBottom: result && !result.passed ? '6px' : '0' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px', textTransform: 'uppercase' }}>Expected Output</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-main)', background: 'var(--bg-surface)', padding: '6px 8px', borderRadius: '4px', whiteSpace: 'pre-wrap', border: '1px solid var(--border-subtle)' }}>{tc.expectedOutput}</div>
+                </div>
+                {result && !result.passed && (
+                  <div>
+                    <div style={{ fontSize: '11px', color: 'var(--error)', marginBottom: '2px', textTransform: 'uppercase' }}>Actual Output</div>
+                    <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--error)', background: 'rgba(239,68,68,0.1)', padding: '6px 8px', borderRadius: '4px', whiteSpace: 'pre-wrap', border: '1px solid rgba(239,68,68,0.2)' }}>{result.actual_output || '(Empty)'}</div>
+                  </div>
+                )}
               </div>
             );
           })}
