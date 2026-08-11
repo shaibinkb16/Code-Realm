@@ -1,5 +1,6 @@
 import React from 'react';
 import { useGame } from '../../context/GameContext';
+import { useAuth } from '../../context/AuthContext';
 import type { ActiveTab } from '../../types/game';
 import {
   Globe,
@@ -14,7 +15,8 @@ import {
   Zap,
   Award,
   ChevronRight,
-  Flame
+  Flame,
+  LogOut
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -25,6 +27,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ onOpenAiModal, isOpen, onClose }) => {
   const { profile, activeTab, setActiveTab } = useGame();
+  const { logout } = useAuth();
 
   const navGroups = [
     {
@@ -44,11 +47,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenAiModal, isOpen, onClose
       ]
     },
     {
-      title: 'Developer Matrix',
+      title: 'Student Matrix',
       items: [
-        { id: 'hq' as ActiveTab, label: 'Developer HQ', icon: Building },
-        { id: 'career' as ActiveTab, label: 'Career Board', icon: Zap },
-        { id: 'profile' as ActiveTab, label: 'Skill Profile', icon: User }
+        { id: 'hq' as ActiveTab, label: 'Study Labs', icon: Building },
+        { id: 'career' as ActiveTab, label: 'Class Board', icon: Zap },
+        { id: 'profile' as ActiveTab, label: 'Report Card', icon: User }
       ]
     }
   ];
@@ -235,13 +238,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenAiModal, isOpen, onClose
           </div>
         </div>
 
-        <button
-          onClick={onOpenAiModal}
-          className="btn-secondary"
-          style={{ width: '100%' }}
-        >
-          <Bot size={16} /> AI Mentor
-        </button>
+        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          <button
+            onClick={onOpenAiModal}
+            className="btn-secondary"
+            style={{ flex: 1, justifyContent: 'center' }}
+          >
+            <Bot size={16} /> AI Mentor
+          </button>
+          <button
+            onClick={logout}
+            className="btn-secondary"
+            style={{ color: 'var(--error)', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+            title="Sign Out"
+          >
+            <LogOut size={16} />
+          </button>
+        </div>
       </div>
     </aside>
   );

@@ -40,7 +40,7 @@ export const Leaderboards: React.FC = () => {
             entries.push({
               rank: entries.length + 1,
               username: `${profile.username} (You)`,
-              avatar: '/avatars/aethercoder.svg',
+              avatar: profile.avatar || '/avatars/aethercoder.svg',
               rating: profile.rankRating,
               xp: profile.xp,
               wins: 48,
@@ -191,7 +191,7 @@ function getSeededData(profile: any): LeaderboardEntry[] {
     { rank: 1, username: 'CipherLord', avatar: '/avatars/cipherlord.svg', rating: 2450, xp: 48900, wins: 342, streak: 48, league: 'Code Champion' },
     { rank: 2, username: 'SyntaxQueen', avatar: '/avatars/syntaxqueen.svg', rating: 2310, xp: 42100, wins: 289, streak: 31, league: 'Legend' },
     { rank: 3, username: 'ByteNinja', avatar: '/avatars/byteninja.svg', rating: 2180, xp: 38400, wins: 254, streak: 22, league: 'Legend' },
-    { rank: 14, username: `${profile.username} (You)`, avatar: '/avatars/aethercoder.svg', rating: profile.rankRating, xp: profile.xp, wins: 48, streak: profile.streak, league: profile.rank, isCurrentUser: true },
+    { rank: 14, username: `${profile.username} (You)`, avatar: profile.avatar || '/avatars/aethercoder.svg', rating: profile.rankRating, xp: profile.xp, wins: 48, streak: profile.streak, league: profile.rank, isCurrentUser: true },
     { rank: 15, username: 'Pythoneer_X', avatar: '/avatars/pythoneerx.svg', rating: 890, xp: 2750, wins: 44, streak: 3, league: 'Bronze' },
   ];
 }

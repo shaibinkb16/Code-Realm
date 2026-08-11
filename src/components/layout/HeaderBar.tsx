@@ -25,11 +25,11 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({ onOpenAssessment, onToggle
       case 'championship':
         return { title: 'Championship', subtitle: 'Season 01 tournament' };
       case 'hq':
-        return { title: 'Developer HQ', subtitle: 'Manage companion & tech infrastructure' };
+        return { title: 'Study Labs', subtitle: 'Manage companion & study room upgrades' };
       case 'career':
-        return { title: 'Career & Company', subtitle: 'TechCorp sprint board & interviews' };
+        return { title: 'Class Board', subtitle: 'Homework assignment board & tutoring exams' };
       case 'profile':
-        return { title: 'Skill Profile', subtitle: 'Multi-domain radar breakdown' };
+        return { title: 'Report Card', subtitle: 'Your fundamental programming skill breakdown' };
       default:
         return { title: 'Code Realm', subtitle: 'Adaptive Matrix' };
     }

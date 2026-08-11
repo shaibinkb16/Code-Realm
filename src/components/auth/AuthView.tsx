@@ -13,6 +13,7 @@ export const AuthView: React.FC = () => {
   
   const [formData, setFormData] = useState({ username: '', email: '', password: '' });
   const [otpCode, setOtpCode] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   
   const [isLoading, setIsLoading] = useState(false);
 
@@ -172,12 +173,12 @@ export const AuthView: React.FC = () => {
           </p>
 
           <div className="input-group" style={{ marginTop: '24px' }}>
-            <label>Username</label>
+            <label>{viewMode === 'login' ? 'Username or Email' : 'Username'}</label>
             <div className="input-wrapper">
               <User size={18} className="input-icon" />
               <input 
                 type="text" 
-                placeholder="e.g. CodeNinja" 
+                placeholder={viewMode === 'login' ? "e.g. CodeNinja or user@example.com" : "e.g. CodeNinja"} 
                 value={formData.username}
                 onChange={(e) => setFormData({...formData, username: e.target.value})}
                 required 
@@ -203,15 +204,40 @@ export const AuthView: React.FC = () => {
 
           <div className="input-group">
             <label>Password</label>
-            <div className="input-wrapper">
+            <div className="input-wrapper" style={{ position: 'relative' }}>
               <Key size={18} className="input-icon" />
               <input 
-                type="password" 
+                type={showPassword ? "text" : "password"} 
                 placeholder="••••••••" 
                 value={formData.password}
                 onChange={(e) => setFormData({...formData, password: e.target.value})}
                 required 
+                style={{ paddingRight: '40px' }}
               />
+              <button 
+                type="button" 
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '4px'
+                }}
+              >
+                {showPassword ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path><line x1="2" y1="2" x2="22" y2="22"></line></svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                )}
+              </button>
             </div>
             {viewMode === 'register' && formData.password.length > 0 && (
               <div className="password-strength">

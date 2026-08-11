@@ -1,5 +1,6 @@
 import uuid
-from sqlalchemy import Column, String, Integer, Boolean, Text, ForeignKey, JSON
+from datetime import datetime
+from sqlalchemy import Column, String, Integer, Boolean, Text, ForeignKey, JSON, DateTime, Float
 from sqlalchemy.orm import relationship
 from sqlalchemy import Uuid as UUID
 from app.core.database import Base
@@ -32,6 +33,16 @@ class Challenge(Base):
     xp_reward = Column(Integer, nullable=False)
     coin_reward = Column(Integer, nullable=False)
     explanation = Column(Text, nullable=False)
+    
+    # Problem Bank / Generated Metadata
+    tags = Column(JSON, default=list, nullable=False)
+    canonical_solution = Column(Text, nullable=True)
+    hints = Column(JSON, default=list, nullable=False)
+    generated_by = Column(String(50), default="human", nullable=False) # 'human' or 'ai'
+    quality_score = Column(Float, default=0.0, nullable=False)
+    validation_status = Column(String(30), default="pending", nullable=False) # pending, approved, rejected
+    usage_count = Column(Integer, default=0, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     test_cases = relationship("TestCase", back_populates="challenge", cascade="all, delete-orphan")
     nodes = relationship("MapNode", back_populates="challenge")

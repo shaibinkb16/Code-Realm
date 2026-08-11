@@ -34,16 +34,14 @@ async def global_exception_handler(request: Request, exc: Exception):
         return JSONResponse(
             status_code=exc.status_code,
             content={
-                "error": {
-                    "code": exc.code,
-                    "message": exc.message,
-                    "path": request.url.path
-                }
+                "detail": exc.message,
+                "code": exc.code,
+                "path": request.url.path
             }
         )
     
     logger.error(f"Unhandled Exception: {str(exc)}", exc_info=True)
     return JSONResponse(
         status_code=500,
-        content={"error": {"code": "INTERNAL_SERVER_ERROR", "message": str(exc), "path": request.url.path}}
+        content={"detail": "Internal Server Error", "message": str(exc), "code": "INTERNAL_SERVER_ERROR", "path": request.url.path}
     )

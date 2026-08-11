@@ -1,13 +1,15 @@
 import React from 'react';
+import { useGame } from '../../context/GameContext';
 import { GitBranch, Sparkles, CheckCircle2, GitPullRequest } from 'lucide-react';
 
 export const GitHubIntegration: React.FC = () => {
+  const { profile } = useGame();
   const stats = [
-    { name: 'Backend Architecture', score: 81, color: '#38A169' },
-    { name: 'AI Engineering & Agents', score: 76, color: '#D9A036' },
-    { name: 'System Design & Scalability', score: 64, color: '#E6672B' },
-    { name: 'Automated Testing Coverage', score: 58, color: '#3182CE' },
-    { name: 'DevOps & CI/CD Pipelines', score: 42, color: '#805AD5' }
+    { name: 'Basic Syntax & Variables', score: 92, color: '#38A169' },
+    { name: 'Control Flow & Loops', score: 85, color: '#D9A036' },
+    { name: 'Lists & Data Structures', score: 74, color: '#E6672B' },
+    { name: 'Functions & Modules', score: 68, color: '#3182CE' },
+    { name: 'Code Formatting & Comments', score: 88, color: '#805AD5' }
   ];
 
   return (
@@ -18,9 +20,9 @@ export const GitHubIntegration: React.FC = () => {
             <GitBranch size={24} color="var(--text-main)" />
           </div>
           <div>
-            <h3 style={{ fontSize: '20px', color: 'var(--text-main)' }}>GITHUB MODE ANALYSIS</h3>
+            <h3 style={{ fontSize: '20px', color: 'var(--text-main)' }}>STUDENT LAB AUDIT</h3>
             <div style={{ fontSize: '12px', color: 'var(--accent-gold)', fontWeight: 600 }}>
-              AI repository code quality & maintainability audit
+              AI analysis of your coding syntax & fundamentals
             </div>
           </div>
         </div>
@@ -36,12 +38,12 @@ export const GitHubIntegration: React.FC = () => {
           alignItems: 'center',
           gap: '6px'
         }}>
-          <CheckCircle2 size={16} /> REPO CONNECTED (@AetherCoder)
+          <CheckCircle2 size={16} /> REPO CONNECTED (@{profile.username})
         </div>
       </div>
 
       <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '20px' }}>
-        AI continuously parses your connected GitHub commits, evaluates code complexity, security practices, unit test coverage, and generates your professional engineering matrix.
+        AI continuously parses your submitted assignments and school code repositories, evaluates your syntax usage, logic structures, and generates your beginner coding score matrix.
       </p>
 
       {/* Developer Profile Matrix Bars */}

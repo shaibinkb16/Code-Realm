@@ -162,9 +162,9 @@ export const CareerCompany: React.FC = () => {
 
       {/* Tab Switcher */}
       <div style={{ display: 'flex', gap: 'var(--space-2)', background: 'var(--bg-surface)', padding: 'var(--space-2)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', overflowX: 'auto' }}>
-        <button onClick={() => setActiveTab('career')} style={tabBtnStyle('career')}><Briefcase size={16} /> Career Paths</button>
-        <button onClick={() => setActiveTab('company')} style={tabBtnStyle('company')}><Building2 size={16} /> Sprint Board</button>
-        <button onClick={() => setActiveTab('interview')} style={tabBtnStyle('interview')}><Video size={16} /> AI Interview</button>
+        <button onClick={() => setActiveTab('career')} style={tabBtnStyle('career')}><Briefcase size={16} /> Learning Pathways</button>
+        <button onClick={() => setActiveTab('company')} style={tabBtnStyle('company')}><Building2 size={16} /> Assignment Board</button>
+        <button onClick={() => setActiveTab('interview')} style={tabBtnStyle('interview')}><Video size={16} /> AI Coding Exam</button>
       </div>
 
       <div>
@@ -222,9 +222,9 @@ export const CareerCompany: React.FC = () => {
           <div className="realm-card" style={{ padding: 'var(--space-6)' }}>
             <div className="flex-between" style={{ flexWrap: 'wrap', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
               <div>
-                <h2 style={{ fontSize: '20px', color: 'var(--text-main)', fontWeight: 700 }}>Agile Sprint Board</h2>
+                <h2 style={{ fontSize: '20px', color: 'var(--text-main)', fontWeight: 700 }}>Homework Assignment Board</h2>
                 <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: 'var(--space-1)' }}>
-                  AI-generated tickets targeting your weakest skills
+                  AI-generated tasks targeting your fundamental programming skills
                 </div>
               </div>
               <button onClick={fetchTickets} className="btn-secondary">
@@ -232,7 +232,7 @@ export const CareerCompany: React.FC = () => {
               </button>
             </div>
             {isLoadingTickets
-              ? <LoadingPlaceholder text="Generating sprint tickets..." />
+              ? <LoadingPlaceholder text="Generating student assignments..." />
               : (
                 <div className="grid-responsive">
                   {tickets.map(ticket => (
@@ -270,7 +270,7 @@ export const CareerCompany: React.FC = () => {
             <div className="flex-between" style={{ flexWrap: 'wrap', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                 <Video size={24} color="var(--text-main)" />
-                <h2 style={{ fontSize: '20px', color: 'var(--text-main)', fontWeight: 700 }}>AI Technical Interview</h2>
+                <h2 style={{ fontSize: '20px', color: 'var(--text-main)', fontWeight: 700 }}>AI Coding Exam</h2>
               </div>
               <button onClick={fetchInterviewQ} className="btn-secondary">
                 <RefreshCw size={14} /> New Question
@@ -278,12 +278,12 @@ export const CareerCompany: React.FC = () => {
             </div>
 
             {isLoadingQ
-              ? <LoadingPlaceholder text="AI Senior Architect is preparing your question..." />
+              ? <LoadingPlaceholder text="AI Coding Tutor is preparing your question..." />
               : interviewQ && (
                 <>
                   <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', padding: 'var(--space-5)', borderRadius: 'var(--radius-lg)', marginBottom: 'var(--space-5)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
-                      <span style={{ fontWeight: 700, color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase' }}>Interviewer (AI Senior Architect) — {interviewQ.topic} · {interviewQ.difficulty}</span>
+                      <span style={{ fontWeight: 700, color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase' }}>Interviewer (AI Tutor) — {interviewQ.topic} · {interviewQ.difficulty}</span>
                     </div>
                     <p style={{ fontSize: '15px', color: 'var(--text-main)', lineHeight: 1.6 }}>"{interviewQ.question}"</p>
                     {!evaluation && (

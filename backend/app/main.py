@@ -16,6 +16,8 @@ from app.api.v1.challenges import router as challenges_router
 from app.api.v1.leaderboards import router as leaderboards_router
 from app.api.v1.career import router as career_router
 from app.api.v1.memory import router as memory_router
+from app.api.v1.practice import router as practice_router
+from app.api.v1.contests import router as contests_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -56,6 +58,8 @@ app.include_router(challenges_router, prefix=f"{settings.API_V1_STR}/challenges"
 app.include_router(leaderboards_router, prefix=f"{settings.API_V1_STR}/leaderboards", tags=["Leaderboards"])
 app.include_router(career_router, prefix=f"{settings.API_V1_STR}/career", tags=["Career"])
 app.include_router(memory_router, prefix=f"{settings.API_V1_STR}/memory", tags=["Project Memory Context RAG"])
+app.include_router(practice_router, prefix=f"{settings.API_V1_STR}/practice", tags=["Learning & Practice"])
+app.include_router(contests_router, prefix=f"{settings.API_V1_STR}/contests", tags=["Contests"])
 
 if __name__ == "__main__":
     import uvicorn

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useGame } from '../../context/GameContext';
 import { Bot, Lightbulb, BookOpen, HelpCircle, Code2, Sparkles, CheckCircle2 } from 'lucide-react';
+import { API_BASE_URL } from '../../services/api';
 
 interface Props {
   challengeId: string;
@@ -15,30 +16,35 @@ export const AITeacherPanel: React.FC<Props> = () => {
   );
   const [loading, setLoading] = useState<boolean>(false);
 
-  const handleAction = (mode: 'hint' | 'explain' | 'socratic' | 'example') => {
+
+  const handleAction = async (mode: 'hint' | 'explain' | 'socratic' | 'example') => {
     setActiveTab(mode);
     setLoading(true);
+    setAiResponse('Consulting the neural network...');
 
-    setTimeout(() => {
+    try {
+      const resp = await fetch(`${API_BASE_URL}/ai/mentor/guidance`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}` // Ensure we pass token if needed
+        },
+        body: JSON.stringify({
+          challenge_id: challengeId,
+          user_code: userCode,
+          mode: mode.charAt(0).toUpperCase() + mode.slice(1) // e.g. "Hint", "Explain"
+        })
+      });
+      
+      if (!resp.ok) throw new Error('Failed to get guidance');
+      
+      const data = await resp.json();
+      setAiResponse(data.content);
+    } catch (err) {
+      setAiResponse("⚠️ Connection to AI Mentor lost. Please check your network and try again.");
+    } finally {
       setLoading(false);
-      if (mode === 'hint') {
-        setAiResponse(
-          "💡 HINT: Remember that range(start, stop) in Python stops BEFORE the 'stop' integer. If you want to include 'n', use range(2, n + 1)!"
-        );
-      } else if (mode === 'explain') {
-        setAiResponse(
-          "📖 EXPLANATION: For-loops iterate through a sequence. The modulo operator `%` calculates the remainder of division. `i % 2 == 0` checks if number `i` divides evenly by 2 without a remainder."
-        );
-      } else if (mode === 'socratic') {
-        setAiResponse(
-          "❓ SOCRATIC QUESTION: Look closely at your total accumulator variable initialization. What initial value should it hold before adding even numbers?"
-        );
-      } else {
-        setAiResponse(
-          "🧪 EXAMPLE PATTERN:\n```python\n# Sum numbers divisible by 3\ntotal = 0\nfor i in range(1, 10):\n    if i % 3 == 0:\n        total += i\n```"
-        );
-      }
-    }, 400);
+    }
   };
 
   return (

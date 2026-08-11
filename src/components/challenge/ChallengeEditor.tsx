@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { AITeacherPanel } from './AITeacherPanel';
+import Editor from '@monaco-editor/react';
 import confetti from 'canvas-confetti';
 import {
   Play,
@@ -62,13 +63,14 @@ import { API_BASE_URL } from '../../services/api';
 const API_BASE = API_BASE_URL;
 
 export const ChallengeEditor: React.FC = () => {
-  const { activeNode, setActiveTab, completeChallenge, profile } = useGame();
+  const { activeNode, setActiveTab, completeChallenge, profile, theme } = useGame();
 
   const [challenge, setChallenge] = useState<AIChallenge | null>(null);
   const [isLoadingChallenge, setIsLoadingChallenge] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [code, setCode] = useState('');
+  const [selectedLanguage, setSelectedLanguage] = useState('python');
   const [isExecuting, setIsExecuting] = useState(false);
   const [output, setOutput] = useState('');
   const [testResults, setTestResults] = useState<TestResult[]>([]);
@@ -78,45 +80,47 @@ export const ChallengeEditor: React.FC = () => {
   const [feedbackText, setFeedbackText] = useState('');
   const [isLoadingFeedback, setIsLoadingFeedback] = useState(false);
 
+  const generateChallenge = async (lang: string) => {
+    setIsLoadingChallenge(true);
+    setLoadError(null);
+    setCode('');
+    setOutput('');
+    setTestResults([]);
+    setHasPassedAll(false);
+
+    const nodeId = activeNode?.id || 'node-loop-1';
+    const nodeTitle = activeNode?.title || 'The Unknown Trial';
+    const realmName = activeNode?.realmId || 'Code Realm';
+    const nodeType = activeNode?.type || 'challenge';
+
+    try {
+      const params = new URLSearchParams({
+        node_id: nodeId,
+        node_title: nodeTitle,
+        realm_name: realmName,
+        node_type: nodeType,
+        skill_rating: String(profile.rankRating || 905),
+        target_language: lang
+      });
+
+      const resp = await fetch(`${API_BASE}/challenges/generate?${params}`);
+      if (!resp.ok) throw new Error(`Server error ${resp.status}`);
+
+      const data = await resp.json();
+      const aiChallenge: AIChallenge = data.challenge;
+
+      setChallenge(aiChallenge);
+      setCode(aiChallenge.initialCode);
+      setSelectedLanguage(aiChallenge.language?.toLowerCase() || lang);
+    } catch (err) {
+      setLoadError('Could not connect to the AI backend.');
+    } finally {
+      setIsLoadingChallenge(false);
+    }
+  };
+
   useEffect(() => {
-    const generateChallenge = async () => {
-      setIsLoadingChallenge(true);
-      setLoadError(null);
-      setCode('');
-      setOutput('');
-      setTestResults([]);
-      setHasPassedAll(false);
-
-      const nodeId = activeNode?.id || 'node-loop-1';
-      const nodeTitle = activeNode?.title || 'The Unknown Trial';
-      const realmName = activeNode?.realmId || 'Code Realm';
-      const nodeType = activeNode?.type || 'challenge';
-
-      try {
-        const params = new URLSearchParams({
-          node_id: nodeId,
-          node_title: nodeTitle,
-          realm_name: realmName,
-          node_type: nodeType,
-          skill_rating: String(profile.rankRating || 905),
-        });
-
-        const resp = await fetch(`${API_BASE}/challenges/generate?${params}`);
-        if (!resp.ok) throw new Error(`Server error ${resp.status}`);
-
-        const data = await resp.json();
-        const aiChallenge: AIChallenge = data.challenge;
-
-        setChallenge(aiChallenge);
-        setCode(aiChallenge.initialCode);
-      } catch (err) {
-        setLoadError('Could not connect to the AI backend.');
-      } finally {
-        setIsLoadingChallenge(false);
-      }
-    };
-
-    generateChallenge();
+    generateChallenge(selectedLanguage);
   }, [activeNode?.id]);
 
   const handleRunCode = async () => {
@@ -131,7 +135,7 @@ export const ChallengeEditor: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           code,
-          language: 'python',
+          language: selectedLanguage,
           test_cases: challenge.testCases.map(tc => ({
             id: tc.id,
             description: tc.description,
@@ -357,7 +361,30 @@ export const ChallengeEditor: React.FC = () => {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
             <Terminal size={14} />
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 600 }}>solution.{challenge.language === 'python' ? 'py' : 'js'}</span>
+            <select 
+              value={selectedLanguage}
+              onChange={(e) => {
+                const lang = e.target.value;
+                setSelectedLanguage(lang);
+                generateChallenge(lang);
+              }}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-main)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '13px',
+                fontWeight: 600,
+                outline: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="python">Python</option>
+              <option value="javascript">JavaScript</option>
+              <option value="typescript">TypeScript</option>
+              <option value="java">Java</option>
+              <option value="cpp">C++</option>
+            </select>
           </div>
           <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
             <button onClick={() => setCode(challenge.initialCode)} className="btn-secondary">
@@ -374,20 +401,18 @@ export const ChallengeEditor: React.FC = () => {
         </div>
 
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          <div style={{
-            padding: 'var(--space-4) var(--space-2)', background: 'var(--bg-surface)', borderRight: '1px solid var(--border-subtle)',
-            color: 'var(--text-dim)', textAlign: 'right', minWidth: '40px', fontFamily: 'var(--font-mono)', fontSize: '14px', lineHeight: 1.6
-          }}>
-            {lines.map((_, i) => <div key={i}>{i + 1}</div>)}
-          </div>
-          <textarea
+          <Editor
+            height="100%"
+            language={selectedLanguage}
+            theme={theme === 'dark' ? 'vs-dark' : 'light'}
             value={code}
-            onChange={(e) => setCode(e.target.value)}
-            spellCheck={false}
-            style={{
-              flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--text-main)',
-              fontFamily: 'var(--font-mono)', fontSize: '14px', lineHeight: 1.6, padding: 'var(--space-4)',
-              resize: 'none', whiteSpace: 'pre'
+            onChange={(value) => setCode(value || '')}
+            options={{
+              minimap: { enabled: false },
+              fontSize: 14,
+              fontFamily: 'var(--font-mono)',
+              padding: { top: 16, bottom: 16 },
+              scrollBeyondLastLine: false,
             }}
           />
         </div>

@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field
 from uuid import UUID
+from typing import Optional
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -43,12 +44,34 @@ class UserProfileResponse(BaseModel):
     class Config:
         from_attributes = True
 
+from typing import List
+
+class LanguageMasteryResponse(BaseModel):
+    id: UUID
+    language_id: UUID
+    mastery_percentage: float
+    skill_rating: int
+
+    class Config:
+        from_attributes = True
+
+class TopicMasteryResponse(BaseModel):
+    id: UUID
+    topic_id: UUID
+    mastery_percentage: float
+    skill_rating: int
+
+    class Config:
+        from_attributes = True
+
 class UserResponse(BaseModel):
     id: UUID
     email: EmailStr
     username: str
     role: str
-    profile: UserProfileResponse
+    profile: Optional[UserProfileResponse] = None
+    language_mastery: List[LanguageMasteryResponse] = Field(default_factory=list)
+    topic_mastery: List[TopicMasteryResponse] = Field(default_factory=list)
 
     class Config:
         from_attributes = True

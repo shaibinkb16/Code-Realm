@@ -6,12 +6,15 @@ import tempfile
 import os
 from typing import Dict, Any, List
 from app.schemas.execution import ExecutionResponse, TestResultResponse
+from app.core.redis import redis_manager
 from app.core.logging import logger
+import asyncio
+import uuid
 
 class ExecutionService:
     @staticmethod
-    def execute_python_code(user_code: str, test_cases: List[Dict[str, Any]]) -> ExecutionResponse:
-        """Executes user Python code inside a restricted subprocess sandbox with timeout and assertion checks."""
+    async def execute_python_code(user_code: str, test_cases: List[Dict[str, Any]]) -> ExecutionResponse:
+        """Executes user code securely by enqueuing it to the ARQ worker which runs the Docker sandbox."""
         start_time = time.time()
         test_results: List[TestResultResponse] = []
         all_passed = True
@@ -32,59 +35,67 @@ class ExecutionService:
                     test_results=[]
                 )
 
-        # Create temporary execution script file
-        with tempfile.NamedTemporaryFile(suffix=".py", mode="w", delete=False) as tmp_file:
-            # Script appends test invocation runner
-            runner_script = f"""{user_code}
-
-# Automated Sandbox Assertions
-import sys
-"""
-            tmp_file.write(runner_script)
-            tmp_filepath = tmp_file.name
-
+        submission_id = str(uuid.uuid4())
+        
         try:
-            # Execute python in isolated subprocess with 3.0 second timeout limit
-            proc = subprocess.run(
-                [sys.executable, tmp_filepath],
-                capture_output=True,
-                text=True,
-                timeout=3.0
-            )
-            console_output = proc.stdout if proc.stdout else proc.stderr
-            
-            if proc.returncode != 0:
+            if not redis_manager.arq_pool:
+                logger.error("ARQ pool not initialized. Is Redis running?")
                 return ExecutionResponse(
-                    status="SYNTAX_ERROR",
+                    status="SYSTEM_ERROR",
                     all_passed=False,
-                    output=f"Execution Error:\n{proc.stderr}",
-                    execution_time_ms=int((time.time() - start_time) * 1000),
+                    output="Execution Engine Unavailable: Cannot connect to the code execution queue (Redis). Please ensure Docker and Redis are running.",
+                    execution_time_ms=0,
                     stars_earned=0,
                     xp_earned=0,
                     coins_earned=0,
                     test_results=[]
                 )
 
-            # Evaluate Test Cases
-            for idx, tc in enumerate(test_cases):
-                expected = str(tc.get("expected_output", "")).strip()
+            # Enqueue the job
+            job = await redis_manager.arq_pool.enqueue_job(
+                "run_code_task",
+                submission_id=submission_id,
+                code=user_code,
+                language="python",
+                test_cases=test_cases,
+                _job_id=submission_id
+            )
+            
+            if not job:
+                raise Exception("Failed to enqueue execution job")
                 
-                # Check if console output or function return matches expected output
-                passed = expected in console_output.strip() or proc.returncode == 0
-                if not passed:
-                    all_passed = False
-
-                test_results.append(
-                    TestResultResponse(
-                        test_id=str(tc.get("id", idx)),
-                        description=tc.get("description", f"Test Case #{idx+1}"),
-                        passed=passed,
-                        expected_output=expected,
-                        actual_output=console_output.strip()
-                    )
+            # Wait for result (timeout 10s)
+            result = await asyncio.wait_for(job.result(), timeout=10.0)
+            
+            elapsed_ms = result.get("execution_time_ms", int((time.time() - start_time) * 1000))
+            all_passed = result.get("status") == "ACCEPTED"
+            stars = 3 if all_passed else 0
+            xp = 250 if all_passed else 20
+            coins = 100 if all_passed else 10
+            
+            parsed_test_results = [
+                TestResultResponse(
+                    test_id=tr.get("test_id", ""),
+                    description=tr.get("description", ""),
+                    passed=tr.get("passed", False),
+                    expected_output=tr.get("expected_output", ""),
+                    actual_output=tr.get("actual_output", "")
                 )
-
-        except subprocess.TimeoutExpired:
+                for tr in result.get("test_results", [])
+            ]
+            
+            return ExecutionResponse(
+                status=result.get("status", "FAILED"),
+                all_passed=all_passed,
+                output=result.get("output", ""),
+                execution_time_ms=elapsed_ms,
+                stars_earned=stars,
+                xp_earned=xp,
+                coins_earned=coins,
+                test_results=parsed_test_results
+            )
+            
+        except asyncio.TimeoutError:
             return ExecutionResponse(
                 status="TIMEOUT",
                 all_passed=False,
@@ -95,24 +106,17 @@ import sys
                 coins_earned=0,
                 test_results=[]
             )
-        finally:
-            if os.path.exists(tmp_filepath):
-                os.remove(tmp_filepath)
-
-        elapsed_ms = int((time.time() - start_time) * 1000)
-        stars = 3 if all_passed else 0
-        xp = 250 if all_passed else 20
-        coins = 100 if all_passed else 10
-
-        return ExecutionResponse(
-            status="PASSED" if all_passed else "FAILED",
-            all_passed=all_passed,
-            output=f"✅ Execution Complete ({elapsed_ms}ms)\nOutput:\n{console_output.strip()}",
-            execution_time_ms=elapsed_ms,
-            stars_earned=stars,
-            xp_earned=xp,
-            coins_earned=coins,
-            test_results=test_results
-        )
+        except Exception as e:
+            logger.error(f"Execution enqueue error: {e}")
+            return ExecutionResponse(
+                status="RUNTIME_ERROR",
+                all_passed=False,
+                output=f"System Error: {str(e)}",
+                execution_time_ms=int((time.time() - start_time) * 1000),
+                stars_earned=0,
+                xp_earned=0,
+                coins_earned=0,
+                test_results=[]
+            )
 
 execution_service = ExecutionService()

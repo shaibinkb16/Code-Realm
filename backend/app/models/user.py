@@ -17,7 +17,8 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
-    skills = relationship("SkillRating", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    language_mastery = relationship("UserLanguageMastery", back_populates="user", cascade="all, delete-orphan")
+    topic_mastery = relationship("UserTopicMastery", back_populates="user", cascade="all, delete-orphan")
     submissions = relationship("CodeSubmission", back_populates="user", cascade="all, delete-orphan")
 
 class UserProfile(Base):
@@ -33,6 +34,7 @@ class UserProfile(Base):
     coins = Column(Integer, default=100, nullable=False)
     stars = Column(Integer, default=0, nullable=False)
     streak = Column(Integer, default=1, nullable=False)
+    last_activity_date = Column(DateTime, nullable=True)
     rank = Column(String(30), default="Bronze", nullable=False)
     rank_rating = Column(Integer, default=500, nullable=False)
     pet_stage = Column(String(30), default="Baby", nullable=False)
@@ -41,17 +43,4 @@ class UserProfile(Base):
 
     user = relationship("User", back_populates="profile")
 
-class SkillRating(Base):
-    __tablename__ = "skill_ratings"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
-    python = Column(Integer, default=500, nullable=False)
-    javascript = Column(Integer, default=500, nullable=False)
-    algorithms = Column(Integer, default=500, nullable=False)
-    debugging = Column(Integer, default=500, nullable=False)
-    databases = Column(Integer, default=500, nullable=False)
-    system_design = Column(Integer, default=500, nullable=False)
-    ai_engineering = Column(Integer, default=500, nullable=False)
-
-    user = relationship("User", back_populates="skills")

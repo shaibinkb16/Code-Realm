@@ -1,6 +1,20 @@
 version: '3.8'
 
 services:
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    command: npm run dev -- --host 0.0.0.0
+    depends_on:
+      - backend
+
   backend:
     build:
       context: ./backend
@@ -21,6 +35,22 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: >
+      sh -c "python -m pip install arq docker && arq app.core.worker.WorkerSettings"
+    volumes:
+      - ./backend:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://coderealm:coderealm_secret_pwd@db:5432/coderealm_db
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=development
+    depends_on:
+      - redis
 
   db:
     image: postgres:16-alpine

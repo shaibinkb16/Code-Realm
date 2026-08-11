@@ -19,14 +19,14 @@ export const realmsData: Realm[] = [
         x: 50,
         y: 95,
         unlocked: true,
-        completed: true,
+        completed: false,
         stars: 3,
         challengeId: 'starter-1',
         prerequisites: [],
         iconName: 'Sparkles',
         subLevels: [
-          { id: 'sub-1-1', title: 'Level 1.1: Hello World & Console Output', type: 'puzzle', xp: 100, coins: 50, completed: true, stars: 3 },
-          { id: 'sub-1-2', title: 'Level 1.2: Variable Declarations', type: 'puzzle', xp: 120, coins: 60, completed: true, stars: 3 },
+          { id: 'sub-1-1', title: 'Level 1.1: Hello World & Console Output', type: 'puzzle', xp: 100, coins: 50, completed: false, stars: 3 },
+          { id: 'sub-1-2', title: 'Level 1.2: Variable Declarations', type: 'puzzle', xp: 120, coins: 60, completed: false, stars: 3 },
           { id: 'sub-1-3', title: 'Level 1.3: Data Type Casting', type: 'puzzle', xp: 150, coins: 75, completed: false, stars: 0 }
         ]
       },
@@ -38,13 +38,13 @@ export const realmsData: Realm[] = [
         x: 35,
         y: 89,
         unlocked: true,
-        completed: true,
+        completed: false,
         stars: 3,
         challengeId: 'starter-1',
         prerequisites: ['node-1'],
         iconName: 'Code2',
         subLevels: [
-          { id: 'sub-2-1', title: 'Level 2.1: Integer Arithmetic', type: 'puzzle', xp: 140, coins: 70, completed: true, stars: 3 },
+          { id: 'sub-2-1', title: 'Level 2.1: Integer Arithmetic', type: 'puzzle', xp: 140, coins: 70, completed: false, stars: 3 },
           { id: 'sub-2-2', title: 'Level 2.2: String Concatenation & Interpolation', type: 'puzzle', xp: 160, coins: 80, completed: false, stars: 0 },
           { id: 'sub-2-3', title: 'Level 2.3: Boolean Flags & State', type: 'puzzle', xp: 180, coins: 90, completed: false, stars: 0 }
         ]

@@ -96,9 +96,9 @@ export const WorldMap: React.FC = () => {
           <path
             d={pathD}
             fill="none"
-            stroke={node.unlocked ? 'var(--text-main)' : 'var(--border-dark)'}
+            stroke={profile.completedNodeIds.includes(prev.id) ? 'var(--text-main)' : 'var(--border-dark)'}
             strokeWidth="3"
-            strokeDasharray={node.unlocked ? '6 6' : '4 4'}
+            strokeDasharray={profile.completedNodeIds.includes(prev.id) ? '6 6' : '4 4'}
             style={{ transition: 'all 0.3s ease' }}
           />
         </g>
@@ -128,7 +128,7 @@ export const WorldMap: React.FC = () => {
         <div style={{ display: 'flex', gap: '12px', overflowX: 'auto' }}>
           {realmsData.map((realm) => {
             const isSelected = realm.id === selectedRealmId;
-            const completedCount = realm.nodes.filter(n => n.completed).length;
+            const completedCount = realm.nodes.filter(n => profile.completedNodeIds.includes(n.id)).length;
             return (
               <button
                 key={realm.id}
@@ -183,7 +183,7 @@ export const WorldMap: React.FC = () => {
         borderRadius: 'var(--radius-lg)',
         position: 'relative',
         minHeight: '1800px',
-        overflow: 'hidden'
+        overflow: 'auto'
       }}>
         {/* Realm Header Info Badge */}
         <div style={{
@@ -214,13 +214,13 @@ export const WorldMap: React.FC = () => {
           <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border-dark)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-dim)', fontWeight: 700, marginBottom: '4px' }}>
               <span>REALM PROGRESS ({activeRealm.nodes.length} NODES)</span>
-              <span>{Math.round((activeRealm.nodes.filter(n => n.completed).length / activeRealm.nodes.length) * 100)}%</span>
+              <span>{Math.round((activeRealm.nodes.filter(n => profile.completedNodeIds.includes(n.id)).length / activeRealm.nodes.length) * 100)}%</span>
             </div>
             <div style={{ background: 'var(--bg-dark)', height: '4px', borderRadius: '2px', overflow: 'hidden' }}>
               <div style={{
                 background: 'var(--text-main)',
                 height: '100%',
-                width: `${(activeRealm.nodes.filter(n => n.completed).length / activeRealm.nodes.length) * 100}%`,
+                width: `${(activeRealm.nodes.filter(n => profile.completedNodeIds.includes(n.id)).length / activeRealm.nodes.length) * 100}%`,
                 borderRadius: '2px',
                 transition: 'width 0.4s ease'
               }} />
@@ -245,9 +245,11 @@ export const WorldMap: React.FC = () => {
           </svg>
 
           {/* Node Waypoint Renderers */}
-          {activeRealm.nodes.map((node) => {
-            const isCurrentActive = profile.level >= 1 && node.id === 'node-starter-3';
-            const isCompleted = node.completed;
+          {activeRealm.nodes.map((node, index) => {
+            const isCompleted = profile.completedNodeIds.includes(node.id);
+            // Unlock logic: Node 1 is always unlocked. Others are unlocked if the previous node is completed.
+            const isUnlocked = index === 0 || profile.completedNodeIds.includes(activeRealm.nodes[index - 1].id);
+            const isCurrentActive = isUnlocked && !isCompleted;
 
             return (
               <div
@@ -259,7 +261,7 @@ export const WorldMap: React.FC = () => {
                   top: `${node.y}%`,
                   transform: 'translate(-50%, -50%)',
                   zIndex: 20,
-                  cursor: node.unlocked ? 'pointer' : 'not-allowed',
+                  cursor: isUnlocked ? 'pointer' : 'not-allowed',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center'
@@ -291,16 +293,16 @@ export const WorldMap: React.FC = () => {
                   width: node.type === 'boss' ? '60px' : '48px',
                   height: node.type === 'boss' ? '60px' : '48px',
                   borderRadius: '50%',
-                  background: !node.unlocked
+                  background: !isUnlocked
                     ? 'var(--bg-dark)'
                     : isCompleted
                     ? 'var(--text-main)'
                     : 'var(--bg-elevated)',
                   border: '2px solid',
-                  borderColor: !node.unlocked
+                  borderColor: !isUnlocked
                     ? 'var(--border-dark)'
                     : 'var(--border-bright)',
-                  color: !node.unlocked
+                  color: !isUnlocked
                     ? 'var(--text-dim)'
                     : isCompleted
                     ? 'var(--bg-dark)'
@@ -308,10 +310,10 @@ export const WorldMap: React.FC = () => {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  boxShadow: node.unlocked ? 'var(--shadow-gold)' : 'none',
+                  boxShadow: isUnlocked ? 'var(--shadow-gold)' : 'none',
                   transition: 'all 0.2s ease'
                 }}>
-                  {!node.unlocked ? (
+                  {!isUnlocked ? (
                     <Lock size={18} color="var(--text-dim)" />
                   ) : isCompleted ? (
                     <Check size={22} strokeWidth={3} />
@@ -333,16 +335,19 @@ export const WorldMap: React.FC = () => {
                   <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-main)', fontFamily: 'var(--font-display)' }}>
                     {node.title}
                   </div>
-                  {node.unlocked && (
+                  {isUnlocked && (
                     <div style={{ display: 'flex', justifyContent: 'center', gap: '2px', marginTop: '2px' }}>
-                      {[1, 2, 3].map((s) => (
-                        <Star
-                          key={s}
-                          size={10}
-                          fill={s <= node.stars ? 'var(--text-main)' : 'none'}
-                          color={s <= node.stars ? 'var(--text-main)' : 'var(--text-dim)'}
-                        />
-                      ))}
+                      {[1, 2, 3].map((s) => {
+                        const earnedStars = profile.nodeStars?.[node.id] || 0;
+                        return (
+                          <Star
+                            key={s}
+                            size={10}
+                            fill={s <= earnedStars ? 'var(--text-main)' : 'none'}
+                            color={s <= earnedStars ? 'var(--text-main)' : 'var(--text-dim)'}
+                          />
+                        );
+                      })}
                     </div>
                   )}
                 </div>

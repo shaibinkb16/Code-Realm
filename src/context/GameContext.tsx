@@ -3,6 +3,7 @@ import type { PlayerProfile, ActiveTab, MapNode, Achievement } from '../types/ga
 import { realmsData } from '../data/realmsData';
 import { achievementsData } from '../data/achievementsData';
 import { api } from '../services/api';
+import { useAuth } from './AuthContext';
 
 interface GameContextType {
   profile: PlayerProfile;
@@ -25,62 +26,70 @@ interface GameContextType {
   toggleTheme: () => void;
 }
 
-const initialProfile: PlayerProfile = {
-  username: 'AetherCoder',
-  title: 'Code Realm Explorer ⚔️',
-  avatar: '/avatars/aethercoder.svg',
-  level: 14,
-  xp: 2840,
-  nextLevelXp: 3000,
-  coins: 12450,
-  stars: 42,
-  streak: 14,
-  rank: 'Gold',
-  rankRating: 905,
-  skills: {
-    python: 905,
-    javascript: 620,
-    algorithms: 742,
-    debugging: 812,
-    databases: 530,
-    systemDesign: 411,
-    aiEngineering: 350
-  },
-  pet: {
-    id: 'pet-dragon-1',
-    name: 'Pyra',
-    stage: 'Junior',
-    xp: 450,
-    level: 3,
-    avatar: '🐉',
-    mood: 'Energetic'
-  },
-  hq: {
-    levelName: 'Developer HQ',
-    unlockedBuildings: ['API Tower', 'Logic Citadel'],
-    customizations: {
-      theme: 'Warm Charcoal',
-      deskItem: 'Golden Mechanical Keyboard',
-      banner: 'Season 01 Legend'
-    }
-  },
-  completedNodeIds: ['node-starter-1', 'node-starter-2', 'node-logic-1'],
-  nodeStars: {
-    'node-starter-1': 3,
-    'node-starter-2': 3,
-    'node-logic-1': 2
-  },
-  unlockedAchievements: ['first-blood', 'unstoppable'],
-  guildName: 'PYTHON MASTERS 🐍',
-  seasonBadge: 'SEASON 01 — PYTHON AGE'
+const buildProfileFromUser = (user: any, existingSavedProfile?: Partial<PlayerProfile>): PlayerProfile => {
+  const p = user?.profile || {};
+  const s = user?.skills || {};
+  const username = user?.username || 'Explorer';
+
+  return {
+    username: username,
+    title: p.title || existingSavedProfile?.title || 'Code Realm Explorer ⚔️',
+    avatar: p.avatar || existingSavedProfile?.avatar || '/avatars/aethercoder.svg',
+    level: existingSavedProfile?.level ?? p.level ?? 1,
+    xp: existingSavedProfile?.xp ?? p.xp ?? 0,
+    nextLevelXp: existingSavedProfile?.nextLevelXp ?? p.next_level_xp ?? 1000,
+    coins: existingSavedProfile?.coins ?? p.coins ?? 100,
+    stars: existingSavedProfile?.stars ?? p.stars ?? 0,
+    streak: existingSavedProfile?.streak ?? p.streak ?? 1,
+    rank: existingSavedProfile?.rank || p.rank || 'Bronze',
+    rankRating: existingSavedProfile?.rankRating ?? p.rank_rating ?? 500,
+    skills: {
+      python: existingSavedProfile?.skills?.python ?? s.python ?? 500,
+      javascript: existingSavedProfile?.skills?.javascript ?? s.javascript ?? 500,
+      algorithms: existingSavedProfile?.skills?.algorithms ?? s.algorithms ?? 500,
+      debugging: existingSavedProfile?.skills?.debugging ?? s.debugging ?? 500,
+      databases: existingSavedProfile?.skills?.databases ?? s.databases ?? 500,
+      systemDesign: existingSavedProfile?.skills?.systemDesign ?? s.system_design ?? 500,
+      aiEngineering: existingSavedProfile?.skills?.aiEngineering ?? s.ai_engineering ?? 500,
+    },
+    pet: existingSavedProfile?.pet || {
+      id: `pet-${user?.id || '1'}`,
+      name: 'Pyra',
+      stage: p.pet_stage || 'Baby',
+      xp: 0,
+      level: p.pet_level ?? 1,
+      avatar: '🐉',
+      mood: 'Energetic'
+    },
+    hq: existingSavedProfile?.hq || {
+      levelName: p.hq_level || 'Room',
+      unlockedBuildings: ['API Tower'],
+      customizations: {
+        theme: 'Warm Charcoal',
+        deskItem: 'Mechanical Keyboard',
+        banner: 'Season 01 Explorer'
+      }
+    },
+    completedNodeIds: existingSavedProfile?.completedNodeIds || [],
+    nodeStars: existingSavedProfile?.nodeStars || {},
+    unlockedAchievements: existingSavedProfile?.unlockedAchievements || ['first-blood'],
+    guildName: existingSavedProfile?.guildName || 'CODE REALM EXPLORERS',
+    seasonBadge: existingSavedProfile?.seasonBadge || 'SEASON 01 — PYTHON AGE'
+  };
 };
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
+
   const [profile, setProfile] = useState<PlayerProfile>(() => {
-    const saved = localStorage.getItem('coderealm_profile');
-    return saved ? JSON.parse(saved) : initialProfile;
+    if (user) {
+      const saved = localStorage.getItem(`coderealm_profile_${user.id}`);
+      const savedParsed = saved ? JSON.parse(saved) : undefined;
+      return buildProfileFromUser(user, savedParsed);
+    }
+    return buildProfileFromUser(null);
   });
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('world');
@@ -90,10 +99,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [achievements] = useState<Achievement[]>(achievementsData);
 
-  const [aiChatMessages, setAiChatMessages] = useState<{ sender: 'ai' | 'user'; text: string; time: string }[]>([
+  const [aiChatMessages, setAiChatMessages] = useState<{ sender: 'ai' | 'user'; text: string; time: string }[]>(() => [
     {
       sender: 'ai',
-      text: 'Greetings, Explorer Aether! I am your AI Mentor & Game Director. I see you are currently in Loop Castle. How can I assist your coding journey today?',
+      text: `Greetings, Explorer ${user?.username || 'Coder'}! I am your AI Mentor & Game Director. How can I assist your coding journey today?`,
       time: 'Just now'
     }
   ]);
@@ -101,8 +110,18 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
   useEffect(() => {
-    localStorage.setItem('coderealm_profile', JSON.stringify(profile));
-  }, [profile]);
+    if (user) {
+      const saved = localStorage.getItem(`coderealm_profile_${user.id}`);
+      const savedParsed = saved ? JSON.parse(saved) : undefined;
+      setProfile(buildProfileFromUser(user, savedParsed));
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (user?.id) {
+      localStorage.setItem(`coderealm_profile_${user.id}`, JSON.stringify(profile));
+    }
+  }, [profile, user?.id]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);

@@ -38,9 +38,10 @@ class AIMentorService:
     # 1. AI MENTOR CHAT
     # ─────────────────────────────────────────────
     @staticmethod
-    async def generate_mentor_guidance(user_prompt: str, mode: str, user_skill_rating: int) -> dict:
-        """Generates AI mentor responses with prompt injection protection."""
-        cleaned_prompt = user_prompt.strip()[:500]
+    async def generate_mentor_guidance(user_code: str, challenge_id: str, mode: str, user_skill_rating: int, recent_errors: list = None) -> dict:
+        """Generates AI mentor responses with prompt injection protection and learner memory."""
+        cleaned_prompt = user_code.strip()[:1500]
+        recent_errors = recent_errors or []
 
         injection_keywords = ["ignore previous instructions", "system prompt", "bypass security", "drop table"]
         for kw in injection_keywords:
@@ -58,16 +59,23 @@ class AIMentorService:
             "Demonstrate": "Provide a short, abstract example demonstrating the pattern.",
         }.get(mode, "Provide helpful, concise coding advice.")
 
+        error_context = ""
+        if recent_errors:
+            error_context = f"The user recently struggled with these errors: {', '.join(recent_errors)}. Keep this in mind to tailor your advice."
+
         system_prompt = (
             f"You are an AI programming mentor for an RPG-style coding game called CODE REALM. "
             f"The user's Python skill rating is {user_skill_rating}/2500. "
+            f"{error_context} "
             f"Mode: {mode.upper()} — {mode_instruction} "
             f"Keep answers concise (max 3 short paragraphs), engaging, and in character as the AI Game Master. "
             f"Do NOT write full solutions unless in Demonstrate mode."
         )
+        
+        user_prompt = f"Challenge ID: {challenge_id}\n\nUser Code:\n```python\n{cleaned_prompt}\n```"
 
         try:
-            reply = await AIMentorService._call_gemini(system_prompt, cleaned_prompt)
+            reply = await AIMentorService._call_gemini(system_prompt, user_prompt)
         except Exception:
             reply = "I'm recalibrating my neural net. Please try again in a moment!"
 
@@ -82,6 +90,7 @@ class AIMentorService:
         realm_name: str,
         node_type: str,
         skill_rating: int,
+        target_language: str = "python"
     ) -> dict:
         """
         Calls Gemini to generate a complete, fresh coding challenge tailored to the
@@ -91,14 +100,14 @@ class AIMentorService:
 
         system_prompt = (
             "You are an AI curriculum designer for CODE REALM, an RPG coding game. "
-            "Generate a Python coding challenge as a valid JSON object. "
+            f"Generate a {target_language.capitalize()} coding challenge as a valid JSON object. "
             "The challenge must be solvable, educational, and thematically tied to the node. "
             "The difficulty must match the player's skill. "
             "Return ONLY valid JSON, no markdown fences."
         )
 
         user_prompt = f"""
-Generate a Python coding challenge for:
+Generate a {target_language.capitalize()} coding challenge for:
 - Map Node: "{node_title}"
 - Realm: "{realm_name}"
 - Node Type: "{node_type}" (boss nodes should be harder multi-part problems)
@@ -111,8 +120,8 @@ Return this exact JSON schema (all fields required):
   "difficulty": "{difficulty}",
   "description": "Clear task description (what the user must write/implement)",
   "storyContext": "1-2 sentence immersive RPG flavor text tying the coding task to the game world",
-  "initialCode": "Starter Python code scaffold with comments (function signature + docstring, NOT solved)",
-  "language": "python",
+  "initialCode": "Starter {target_language.capitalize()} code scaffold with comments (function signature + docstring, NOT solved)",
+  "language": "{target_language.lower()}",
   "testCases": [
     {{
       "id": "t1",
@@ -129,11 +138,21 @@ Return this exact JSON schema (all fields required):
 
 Rules:
 - Minimum 2 test cases, maximum 4
-- The initialCode must compile without errors but NOT solve the problem (use `pass` or placeholder)
-- expectedOutput must exactly match what Python's print() would output
+- The initialCode must compile without errors but NOT solve the problem
+- expectedOutput must exactly match what the program would output to stdout (print/console.log)
 - For boss nodes: make it a harder algorithm problem (sorting, recursion, or data structures)
-- For regular nodes: focus on one clear Python concept (loops, functions, conditionals, lists, etc.)
+- For regular nodes: focus on one clear concept (loops, functions, conditionals, lists, etc.)
 """
+
+        fallback_stubs = {
+            "python": "def solve(n):\n    # Your code here\n    pass\n\nprint(solve(5))",
+            "javascript": "function solve(n) {\n    // Your code here\n}\n\nconsole.log(solve(5));",
+            "java": "class Solution {\n    public static int solve(int n) {\n        // Your code here\n        return 0;\n    }\n    public static void main(String[] args) {\n        System.out.println(solve(5));\n    }\n}",
+            "cpp": "#include <iostream>\nusing namespace std;\n\nint solve(int n) {\n    // Your code here\n    return 0;\n}\n\nint main() {\n    cout << solve(5) << endl;\n    return 0;\n}",
+            "typescript": "function solve(n: number): number {\n    // Your code here\n    return 0;\n}\n\nconsole.log(solve(5));"
+        }
+        
+        fallback_stub = fallback_stubs.get(target_language.lower(), fallback_stubs["python"])
 
         try:
             raw = await AIMentorService._call_gemini(system_prompt, user_prompt, json_mode=True)
@@ -153,10 +172,10 @@ Rules:
                     "title": f"The Trial of {node_title}",
                     "type": "puzzle",
                     "difficulty": difficulty,
-                    "description": "Write a Python function `solve(n)` that returns the sum of all integers from 1 to n.",
+                    "description": f"Write a {target_language.capitalize()} function `solve(n)` that returns the sum of all integers from 1 to n.",
                     "storyContext": f"The ancient oracle of {realm_name} demands a tribute of numbers. Prove your worth.",
-                    "initialCode": "def solve(n):\n    # Your code here\n    pass\n\nprint(solve(5))",
-                    "language": "python",
+                    "initialCode": fallback_stub,
+                    "language": target_language.lower(),
                     "testCases": [
                         {"id": "t1", "input": "", "expectedOutput": "15", "description": "solve(5) returns 15"},
                         {"id": "t2", "input": "", "expectedOutput": "55", "description": "solve(10) returns 55"},
@@ -193,6 +212,12 @@ Rules:
             "encouraging feedback. Max 4 sentences. Be specific about what they did well or what to fix."
         )
 
+        if all_passed:
+            system_prompt += (
+                " Since the user passed all tests, you MUST estimate the Time and Space Complexity (Big O) "
+                "of their exact submission. Suggest one alternative, more efficient or Pythonic way to solve it."
+            )
+            
         user_prompt = f"""
 Challenge: "{challenge_title}"
 Task: {challenge_description}
@@ -207,7 +232,7 @@ All Passed: {all_passed}
 Player Skill Rating: {skill_rating}/2500
 
 Provide a short feedback (3-4 sentences):
-- If all passed: Praise what they did well + one tip to improve code quality/efficiency
+- If all passed: Provide Big-O complexity analysis and one alternative approach.
 - If failed: Explain the key mistake clearly + give a hint without giving the solution
 """
 

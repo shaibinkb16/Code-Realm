@@ -9,7 +9,7 @@ from app.core.database import get_db
 from app.core.redis import redis_manager
 from app.core.email import send_otp_email
 from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token, decode_token
-from app.models.user import User, UserProfile, SkillRating
+from app.models.user import User, UserProfile
 from app.schemas.auth import UserCreate, UserLogin, Token, UserResponse, OTPVerifyRequest, OTPResendRequest, RefreshTokenRequest
 from app.core.exceptions import AuthenticationError, ValidationError
 from app.api.deps import get_current_user, RateLimiter
@@ -51,9 +51,7 @@ async def register_user(user_in: UserCreate, background_tasks: BackgroundTasks, 
     await db.flush()
 
     profile = UserProfile(user_id=new_user.id)
-    skills = SkillRating(user_id=new_user.id)
     db.add(profile)
-    db.add(skills)
     await db.commit()
     
     await _generate_and_send_otp(user_in.email, background_tasks)
@@ -63,7 +61,7 @@ async def register_user(user_in: UserCreate, background_tasks: BackgroundTasks, 
 @router.post("/login", response_model=Token, dependencies=[Depends(RateLimiter(5, 60))])
 async def login(credentials: UserLogin, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     """Authenticates credentials against Argon2id hash. Rejects if not verified."""
-    res = await db.execute(select(User).where(User.username == credentials.username))
+    res = await db.execute(select(User).where((User.username == credentials.username) | (User.email == credentials.username)))
     user = res.scalars().first()
 
     if not user or not verify_password(credentials.password, user.hashed_password):

@@ -1,10 +1,13 @@
 import redis.asyncio as redis
+from arq import create_pool
+from arq.connections import RedisSettings
 from app.core.config import settings
 from app.core.logging import logger
 
 class RedisManager:
     def __init__(self):
         self.redis_client: redis.Redis | None = None
+        self.arq_pool = None
 
     async def connect(self):
         try:
@@ -14,6 +17,9 @@ class RedisManager:
                 decode_responses=True
             )
             await self.redis_client.ping()
+            
+            # Init ARQ connection pool
+            self.arq_pool = await create_pool(RedisSettings.from_dsn(settings.REDIS_URI))
             logger.info("Connected to Redis successfully.")
         except Exception as e:
             logger.error(f"Failed to connect to Redis: {str(e)}")
@@ -22,6 +28,11 @@ class RedisManager:
     async def close(self):
         if self.redis_client:
             await self.redis_client.close()
+            
+        if self.arq_pool:
+            await self.arq_pool.close()
+            
+        if self.redis_client or self.arq_pool:
             logger.info("Closed Redis connection.")
 
     async def get(self, key: str) -> str | None:

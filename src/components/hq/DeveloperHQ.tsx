@@ -12,20 +12,20 @@ import {
 const API_BASE = API_BASE_URL;
 
 const HQ_TIERS = [
-  { name: 'Room',          buildings: 0, cost: 0,    desc: 'A humble coding corner.' },
-  { name: 'Office',        buildings: 1, cost: 1000, desc: 'A proper developer office.', unlocks: 'API Tower' },
-  { name: 'Studio',        buildings: 2, cost: 2000, desc: 'A professional coding studio.', unlocks: 'Logic Citadel' },
-  { name: 'Developer HQ',  buildings: 3, cost: 3500, desc: 'Your full Developer HQ.', unlocks: 'Database Center' },
-  { name: 'AI Laboratory', buildings: 4, cost: 6000, desc: 'Cutting-edge AI research lab.', unlocks: 'AI Inference Engine' },
-  { name: 'Tech Empire',   buildings: 5, cost: 10000, desc: 'A sprawling Tech Empire.', unlocks: 'Global CDN Node' },
+  { name: 'Room',          buildings: 0, cost: 0,    desc: 'A simple student study desk.' },
+  { name: 'Office',        buildings: 1, cost: 1000, desc: 'A comfortable student study room.', unlocks: 'Variables Lab' },
+  { name: 'Studio',        buildings: 2, cost: 2000, desc: 'A collaborative code classroom.', unlocks: 'Loop Citadel' },
+  { name: 'Developer HQ',  buildings: 3, cost: 3500, desc: 'Your full Coding Matrix HQ.', unlocks: 'List Vault' },
+  { name: 'AI Laboratory', buildings: 4, cost: 6000, desc: 'Advanced AI Tutor study hall.', unlocks: 'AI Tutor Room' },
+  { name: 'Tech Empire',   buildings: 5, cost: 10000, desc: 'A sprawling Coding Academy.', unlocks: 'Graduation Hall' },
 ];
 
 const BUILDINGS = [
-  { name: 'API Tower',           icon: <Zap size={20} />, passive: 50,  desc: 'REST API gateway for your empire' },
-  { name: 'Logic Citadel',       icon: <Brain size={20} />, passive: 80,  desc: 'Algorithmic logic processing core' },
-  { name: 'Database Center',     icon: <Layers size={20} />, passive: 120, desc: 'Persistent data storage fortress' },
-  { name: 'AI Inference Engine', icon: <Bot size={20} />, passive: 200, desc: 'Neural network inference cluster' },
-  { name: 'Global CDN Node',     icon: <GlobeIcon size={20} />, passive: 300, desc: 'Worldwide content delivery network' },
+  { name: 'Variables Lab',      icon: <Zap size={20} />, passive: 50,  desc: 'Study data storage and assignment operators' },
+  { name: 'Loop Citadel',       icon: <Brain size={20} />, passive: 80,  desc: 'Master repeating tasks and code block flows' },
+  { name: 'List Vault',         icon: <Layers size={20} />, passive: 120, desc: 'Learn simple array and collection structures' },
+  { name: 'AI Tutor Room',      icon: <Bot size={20} />, passive: 200, desc: 'Interact with your neural tutoring system' },
+  { name: 'Graduation Hall',    icon: <GlobeIcon size={20} />, passive: 300, desc: 'Showcase your solved coding challenges' },
 ];
 
 function GlobeIcon(props: any) {

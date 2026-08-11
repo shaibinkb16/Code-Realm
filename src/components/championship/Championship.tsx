@@ -1,21 +1,23 @@
 import React from 'react';
+import { useGame } from '../../context/GameContext';
 import { Trophy, Crown, Timer, Swords } from 'lucide-react';
 
 export const Championship: React.FC = () => {
+  const { profile } = useGame();
 
   const bracketData = {
     qualifiers: [
-      { p1: 'AetherCoder', p2: 'CodeRider', winner: 'AetherCoder', score: '3-1' },
+      { p1: profile.username, p2: 'CodeRider', winner: profile.username, score: '3-1' },
       { p1: 'ByteNinja', p2: 'AlgoMaster', winner: 'ByteNinja', score: '3-0' },
       { p1: 'SyntaxQueen', p2: 'PyHero', winner: 'SyntaxQueen', score: '3-2' },
       { p1: 'CipherLord', p2: 'LogicKnight', winner: 'CipherLord', score: '3-0' }
     ],
     semifinals: [
-      { p1: 'AetherCoder (You)', p2: 'ByteNinja', winner: 'AetherCoder', score: '3-2' },
+      { p1: `${profile.username} (You)`, p2: 'ByteNinja', winner: profile.username, score: '3-2' },
       { p1: 'SyntaxQueen', p2: 'CipherLord', winner: 'CipherLord', score: '3-1' }
     ],
     finals: [
-      { p1: 'AetherCoder (You)', p2: 'CipherLord', timeRemaining: '04:12 Live', status: 'IN PROGRESS' }
+      { p1: `${profile.username} (You)`, p2: 'CipherLord', timeRemaining: '04:12 Live', status: 'IN PROGRESS' }
     ]
   };
 
