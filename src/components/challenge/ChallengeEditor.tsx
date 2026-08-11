@@ -215,7 +215,6 @@ export const ChallengeEditor: React.FC = () => {
     }
   };
 
-  const lines = code.split('\n');
 
   if (isLoadingChallenge) {
     return (

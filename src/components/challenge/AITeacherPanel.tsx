@@ -8,7 +8,7 @@ interface Props {
   userCode: string;
 }
 
-export const AITeacherPanel: React.FC<Props> = () => {
+export const AITeacherPanel: React.FC<Props> = ({ challengeId, userCode }) => {
   const { profile } = useGame();
   const [activeTab, setActiveTab] = useState<'hint' | 'explain' | 'socratic' | 'example'>('hint');
   const [aiResponse, setAiResponse] = useState<string>(
