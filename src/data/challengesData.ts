@@ -9,11 +9,11 @@ export const challengesData: Record<string, Challenge> = {
     difficulty: 'Easy',
     description: 'Create a variable named `realm_name` and set it to `"Code Realm"`. Then print `"Welcome to " + realm_name`.',
     storyContext: 'You arrive at the edge of Starter Village. The stone altar awakes when you speak the name of the realm into existence.',
-    initialCode: `# Define your variable below
-realm_name = "Code Realm"
+    initialCode: `# Create a variable named realm_name set to "Code Realm"
+# Then print "Welcome to " + realm_name
 
-# Print the welcome greeting
-print("Welcome to " + realm_name)
+# Write your code below:
+
 `,
     language: 'python',
     testCases: [
@@ -42,14 +42,11 @@ print("Welcome to " + realm_name)
     description: 'Write a function `check_passcode(code)` that returns `"ACCESS GRANTED"` if code is `777`, else `"ACCESS DENIED"`.',
     storyContext: 'The iron gates of Logic Forest are sealed with an ancient passcode mechanism. Pass the test to enter.',
     initialCode: `def check_passcode(code):
-    if code == 777:
-        return "ACCESS GRANTED"
-    else:
-        return "ACCESS DENIED"
+    # TODO: Return "ACCESS GRANTED" if code is 777, else "ACCESS DENIED"
+    pass
 
 # Test invocation
 print(check_passcode(777))
-print(check_passcode(123))
 `,
     language: 'python',
     testCases: [
@@ -81,11 +78,11 @@ print(check_passcode(123))
     title: 'Forest Corruption Hunt',
     type: 'bughunt',
     difficulty: 'Easy',
-    description: 'Fix the bug in `calculate_mana_cost(level, spells)`. Currently it throws a SyntaxError and calculates incorrectly!',
+    description: 'Fix the bug in `calculate_mana_cost(level, spells)`. Currently it calculates incorrectly!',
     storyContext: 'Corrupted code vines are draining mana from the Logic Forest spirits. Repair the calculation formula!',
     initialCode: `def calculate_mana_cost(level, spells):
-    # BUG: Typo in syntax and wrong mathematical operator!
-    total = level * 10 + spells * 5
+    # BUG: Incorrect formula! Must return level * 10 + spells * 5
+    total = level + spells # Fix this calculation!
     return total
 
 print(calculate_mana_cost(3, 4))
@@ -123,10 +120,10 @@ print(calculate_mana_cost(3, 4))
     description: 'Write a function `sum_even_numbers(n)` that returns the sum of all even integers from `2` up to `n` (inclusive).',
     storyContext: 'To ascend the spiral stairs of Loop Castle, you must sum the power of all even step numbers.',
     initialCode: `def sum_even_numbers(n):
+    # TODO: Return the sum of all even integers from 2 up to n (inclusive)
     total = 0
-    for i in range(2, n + 1):
-        if i % 2 == 0:
-            total += i
+    # Your code here:
+    
     return total
 
 print(sum_even_numbers(10)) # Should be 2+4+6+8+10 = 30
@@ -155,7 +152,7 @@ print(sum_even_numbers(10)) # Should be 2+4+6+8+10 = 30
     explanation: '`range(2, n+1)` generates integers from 2 to n. Modulo `% 2` checks for even numbers.'
   },
 
-  // 🏰 boss-loop-dragon Phase 1-5 Challenge
+  // 🏰 loop-boss-challenge
   'loop-boss-challenge': {
     id: 'loop-boss-challenge',
     title: 'Defeat the Loop Dragon',
@@ -164,14 +161,13 @@ print(sum_even_numbers(10)) # Should be 2+4+6+8+10 = 30
     description: 'Write a function `dragon_shield(power_levels)` that filters out negative numbers and returns the sum of squared positive values.',
     storyContext: '🐉 THE LOOP DRAGON breathes fiery energy loops! Shield the realm by filtering out corrupt negative power pulses and squaring the positive forces!',
     initialCode: `def dragon_shield(power_levels):
-    # Filter negative numbers, square positive ones, return the sum
+    # TODO: Filter out negative numbers, square positive ones, return the sum
     total = 0
-    for p in power_levels:
-        if p > 0:
-            total += p ** 2
+    # Your code here:
+    
     return total
 
-print(dragon_shield([3, -2, 4, -5, 2])) # 3^2 + 4^2 + 2^2 = 9 + 16 + 4 = 29
+print(dragon_shield([3, -2, 4, -5, 2])) # Expected: 29
 `,
     language: 'python',
     testCases: [
@@ -206,10 +202,10 @@ print(dragon_shield([3, -2, 4, -5, 2])) # 3^2 + 4^2 + 2^2 = 9 + 16 + 4 = 29
     description: 'Build a function `format_user_profile(username, score, role="Developer")` that returns `"USER: [username] | SCORE: [score] | ROLE: [role]"`.',
     storyContext: 'Developer City needs a standardized profile formatter for its central networking directory.',
     initialCode: `def format_user_profile(username, score, role="Developer"):
-    return f"USER: {username} | SCORE: {score} | ROLE: {role}"
+    # TODO: Return formatted string: "USER: <username> | SCORE: <score> | ROLE: <role>"
+    pass
 
 print(format_user_profile("Aether", 950))
-print(format_user_profile("Cipher", 1200, "Architect"))
 `,
     language: 'python',
     testCases: [
@@ -244,16 +240,11 @@ print(format_user_profile("Cipher", 1200, "Architect"))
     description: 'Write a JavaScript function `parseApiResponse(jsonString)` that parses JSON and returns the `data.status` property if available, else `"FAILED"`.',
     storyContext: 'At the gates of Web Kingdom, async signals flow continuously. Parse raw JSON data streams cleanly.',
     initialCode: `function parseApiResponse(jsonString) {
-  try {
-    const obj = JSON.parse(jsonString);
-    return obj.data && obj.data.status ? obj.data.status : "FAILED";
-  } catch (err) {
-    return "FAILED";
-  }
+  // TODO: Parse JSON string and return obj.data.status if present, else "FAILED"
+  return "FAILED";
 }
 
 console.log(parseApiResponse('{"data": {"status": "SUCCESS"}}'));
-console.log(parseApiResponse('invalid json'));
 `,
     language: 'javascript',
     testCases: [

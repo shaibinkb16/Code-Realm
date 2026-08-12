@@ -11,12 +11,12 @@ export const AICompanionModal: React.FC = () => {
 
   const handleSend = () => {
     if (!inputText.trim()) return;
-    sendAiMessage(inputText);
+    sendAiMessage(inputText, activeMode);
     setInputText('');
   };
 
   const handleQuickPrompt = (promptText: string) => {
-    sendAiMessage(promptText);
+    sendAiMessage(promptText, activeMode);
   };
 
   return (

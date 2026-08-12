@@ -15,7 +15,7 @@ interface GameContextType {
   isAiModalOpen: boolean;
   setIsAiModalOpen: (open: boolean) => void;
   aiChatMessages: { sender: 'ai' | 'user'; text: string; time: string }[];
-  sendAiMessage: (text: string) => void;
+  sendAiMessage: (text: string, mode?: string) => void;
   completeChallenge: (nodeId: string, stars: number, xp: number, coins: number) => void;
   achievements: Achievement[];
   upgradePet: () => void;
@@ -182,27 +182,17 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  const sendAiMessage = async (text: string) => {
+  const sendAiMessage = async (text: string, mode: string = 'Explain') => {
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     setAiChatMessages(prev => [...prev, { sender: 'user', text, time: timeStr }]);
 
-    const apiRes = await api.askAiMentor(text, 'Explain', profile.skills.python);
+    const apiRes = await api.askAiMentor(text, mode, profile.skills.python);
     
     let reply = '';
     if (apiRes && apiRes.content) {
       reply = apiRes.content;
     } else {
-      reply = `That's a great question! `;
-      const lower = text.toLowerCase();
-      if (lower.includes('hint') || lower.includes('stuck')) {
-        reply += `I evaluated your active code. Try checking your loop bounds or ensuring you iterate through all elements cleanly. Avoid mutating lists directly while looping!`;
-      } else if (lower.includes('python') || lower.includes('loop')) {
-        reply += `In Python, loops can be written as 'for item in items:' or 'for i in range(len(items)):'. Range generation is fast and handles bounds automatically.`;
-      } else if (lower.includes('career') || lower.includes('job')) {
-        reply += `Your Python skill rating is 905 (Top 5% in Gold Division)! Your strongest domain is Debugging. I recommend tackling System Design next in the Career Arena.`;
-      } else {
-        reply += `Based on your recent solve time of 4m 12s, you are demonstrating strong algorithmic speed! Keep pushing forward through Loop Castle!`;
-      }
+      reply = `I evaluated your request. Focus on clean syntax and logical flow!`;
     }
 
     setAiChatMessages(prev => [...prev, { sender: 'ai', text: reply, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);

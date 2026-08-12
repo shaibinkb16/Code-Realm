@@ -124,8 +124,8 @@ export const CodeDuel: React.FC = () => {
           test_cases: challenge.testCases.map(tc => ({
             id: tc.id,
             description: tc.description,
-            input: tc.input || '',
-            expected_output: tc.expectedOutput,
+            input: tc.input ?? (tc as any).input_data ?? '',
+            expected_output: tc.expectedOutput ?? (tc as any).expected_output ?? '',
           })),
         }),
       });

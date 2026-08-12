@@ -36,6 +36,27 @@ async def get_current_user(
     
     return user
 
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
+
+async def get_optional_user(
+    token: str | None = Depends(oauth2_scheme_optional),
+    db: AsyncSession = Depends(get_db)
+) -> User | None:
+    """Dependency that extracts User if bearer token exists, otherwise returns None."""
+    if not token:
+        return None
+    import uuid
+    try:
+        payload = decode_token(token)
+        user_id_str: str = payload.get("sub")
+        if not user_id_str:
+            return None
+        user_id = uuid.UUID(user_id_str)
+        res = await db.execute(select(User).options(selectinload(User.profile)).where(User.id == user_id))
+        return res.scalars().first()
+    except Exception:
+        return None
+
 from app.core.redis import redis_manager
 
 class RateLimiter:
@@ -44,21 +65,15 @@ class RateLimiter:
         self.window_seconds = window_seconds
 
     async def __call__(self, request: Request):
-        if not redis_manager.redis_client:
-            return  # Skip if Redis is not connected (e.g. during some tests)
-            
         client_ip = request.client.host if request.client else "unknown"
         path = request.url.path
-        key = f"rate_limit:{path}:{client_ip}"
+        identifier = f"{path}:{client_ip}"
         
-        current = await redis_manager.redis_client.get(key)
-        if current and int(current) >= self.requests:
+        allowed = await redis_manager.check_rate_limit(identifier, limit=self.requests, window_sec=self.window_seconds)
+        if not allowed:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Too many requests. Please try again later."
             )
-            
-        pipe = redis_manager.redis_client.pipeline()
-        pipe.incr(key, 1)
-        pipe.expire(key, self.window_seconds)
-        await pipe.execute()
+
+

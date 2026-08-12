@@ -3,6 +3,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from app.core.database import get_db
 from app.core.redis import redis_manager
+from app.core.mongo import verify_mongo_connection
+from app.core.supabase import get_supabase_client
 
 router = APIRouter()
 
@@ -13,15 +15,22 @@ async def liveness_health_check():
 
 @router.get("/ready", status_code=status.HTTP_200_OK)
 async def readiness_health_check(db: AsyncSession = Depends(get_db)):
-    """Readiness probe: verifies database and Redis dependency health."""
+    """Readiness probe: verifies database, Supabase, MongoDB, and Redis dependency health."""
     db_healthy = False
     redis_healthy = False
+    mongo_healthy = False
+    supabase_healthy = get_supabase_client() is not None
 
     try:
         result = await db.execute(text("SELECT 1"))
         db_healthy = result.scalar() == 1
     except Exception:
         db_healthy = False
+
+    try:
+        mongo_healthy = await verify_mongo_connection()
+    except Exception:
+        mongo_healthy = False
 
     if redis_manager.redis_client:
         try:
@@ -34,6 +43,8 @@ async def readiness_health_check(db: AsyncSession = Depends(get_db)):
             "status": "ready",
             "dependencies": {
                 "database": "connected" if db_healthy else "disconnected",
+                "supabase_client": "connected" if supabase_healthy else "standby",
+                "mongodb_fallback": "connected" if mongo_healthy else "standby",
                 "redis": "connected" if redis_healthy else "degraded"
             }
         }
@@ -42,6 +53,9 @@ async def readiness_health_check(db: AsyncSession = Depends(get_db)):
         "status": "unhealthy",
         "dependencies": {
             "database": "disconnected",
+            "supabase_client": "connected" if supabase_healthy else "standby",
+            "mongodb_fallback": "connected" if mongo_healthy else "standby",
             "redis": "connected" if redis_healthy else "disconnected"
         }
     }
+

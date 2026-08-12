@@ -42,13 +42,14 @@ export const AuthView: React.FC = () => {
         setResendTimer(60);
       }
     } catch (err: any) {
-      if (err.detail && err.detail.message === "Account not verified") {
+      if (err.detail && typeof err.detail === 'object' && err.detail.message === "Account not verified") {
         setFormData(prev => ({ ...prev, email: err.detail.email || formData.email }));
         setViewMode('otp');
         showError("Your account is not verified. A new OTP has been sent to your email.");
         setResendTimer(60);
       } else {
-        showError(err.message || err.detail || 'Authentication failed');
+        const msg = typeof err.detail === 'string' ? err.detail : (err.message || 'Authentication failed');
+        showError(msg);
       }
     } finally {
       setIsLoading(false);
@@ -258,6 +259,58 @@ export const AuthView: React.FC = () => {
               </div>
             )}
           </div>
+
+          {viewMode === 'login' && (
+            <div style={{ margin: '16px 0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Quick Login Credentials
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ username: 'shaibinkb16@gmail.com', email: 'shaibinkb16@gmail.com', password: 'RealmPassword123!' })}
+                  style={{
+                    flex: 1,
+                    padding: '8px 10px',
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border-bright)',
+                    borderRadius: '6px',
+                    color: 'var(--text-main)',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  ⚡ Fill User Login
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ username: 'AetherCoder', email: 'explorer@coderealm.com', password: 'RealmPassword123!' })}
+                  style={{
+                    flex: 1,
+                    padding: '8px 10px',
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border-bright)',
+                    borderRadius: '6px',
+                    color: 'var(--text-main)',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  🛡️ Fill Explorer Login
+                </button>
+              </div>
+            </div>
+          )}
 
           <button type="submit" className="auth-submit-btn" disabled={isLoading}>
             {isLoading ? (

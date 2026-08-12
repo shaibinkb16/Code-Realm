@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, status, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 import random
 import string
@@ -61,7 +62,13 @@ async def register_user(user_in: UserCreate, background_tasks: BackgroundTasks, 
 @router.post("/login", response_model=Token, dependencies=[Depends(RateLimiter(5, 60))])
 async def login(credentials: UserLogin, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     """Authenticates credentials against Argon2id hash. Rejects if not verified."""
-    res = await db.execute(select(User).where((User.username == credentials.username) | (User.email == credentials.username)))
+    clean_identity = credentials.username.strip()
+    res = await db.execute(
+        select(User).where(
+            (func.lower(User.username) == clean_identity.lower()) |
+            (func.lower(User.email) == clean_identity.lower())
+        )
+    )
     user = res.scalars().first()
 
     if not user or not verify_password(credentials.password, user.hashed_password):

@@ -77,8 +77,8 @@ export const BossFight: React.FC = () => {
             storyContext: `The ${bossName} unleashes a devastating Phase ${i + 1} attack!`,
             initialCode: `def solve_${i + 1}(n):\n    # Your code here\n    pass\n\nprint(solve_${i + 1}(3))`,
             testCases: [
-              { id: 't1', input: '', expectedOutput: '14', description: `solve_${i+1}(3) = 1+4+9 = 14` },
-              { id: 't2', input: '', expectedOutput: '55', description: `solve_${i+1}(5) = 1+4+9+16+25 = 55` },
+              { id: 't1', input: '3', expectedOutput: '14', description: `solve_${i+1}(3) = 1+4+9 = 14` },
+              { id: 't2', input: '5', expectedOutput: '55', description: `solve_${i+1}(5) = 1+4+9+16+25 = 55` },
             ],
             hints: ['Use a loop to accumulate squared values'],
             xpReward: 500 + i * 200,
@@ -112,8 +112,8 @@ export const BossFight: React.FC = () => {
           test_cases: currentPhase.testCases.map(tc => ({
             id: tc.id,
             description: tc.description,
-            input: tc.input || '',
-            expected_output: tc.expectedOutput,
+            input: tc.input ?? (tc as any).input_data ?? '',
+            expected_output: tc.expectedOutput ?? (tc as any).expected_output ?? '',
           })),
         }),
       });

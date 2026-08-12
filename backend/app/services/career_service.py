@@ -1,27 +1,16 @@
-import httpx
 import json
 from app.core.config import settings
 from app.core.logging import logger
+from app.core.llm_client import call_llm_with_fallback
 
 
 class CareerService:
 
     @staticmethod
     async def _call_gemini(system_prompt: str, user_prompt: str) -> str:
-        url = (
-            f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"gemini-1.5-flash:generateContent?key={settings.AI_API_KEY}"
-        )
-        payload = {
-            "system_instruction": {"parts": [{"text": system_prompt}]},
-            "contents": [{"parts": [{"text": user_prompt}]}],
-            "generationConfig": {"response_mime_type": "application/json"},
-        }
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(url, json=payload, timeout=20.0)
-            resp.raise_for_status()
-            data = resp.json()
-            return data["candidates"][0]["content"]["parts"][0]["text"]
+        """Calls multi-provider LLM service with primary Gemini and automatic Groq fallback."""
+        return await call_llm_with_fallback(system_prompt, user_prompt, json_mode=True)
+
 
     @staticmethod
     async def generate_career_recommendations(

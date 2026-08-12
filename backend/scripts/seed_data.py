@@ -1,8 +1,12 @@
+import sys
+import os
 import asyncio
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from app.core.database import AsyncSessionLocal, engine, Base
 from app.models.challenge import Realm, MapNode, Challenge, TestCase
-from app.models.user import User, UserProfile, SkillRating
-from app.models.submission import CodeSubmission
+from app.models.user import User, UserProfile
 from app.core.security import hash_password
 from app.core.logging import logger
 
@@ -23,7 +27,7 @@ async def seed_database():
             theme_color="#38A169",
             icon="🌱"
         )
-        session.add(realm1)
+        await session.merge(realm1)
 
         # Seed Challenge 1
         ch1 = Challenge(
@@ -33,13 +37,13 @@ async def seed_database():
             difficulty="Easy",
             description="Create a variable `realm_name` set to 'Code Realm' and print 'Welcome to ' + realm_name.",
             story_context="The stone altar awakes when you speak the realm name.",
-            initial_code='realm_name = "Code Realm"\nprint("Welcome to " + realm_name)',
+            initial_code='# Create a variable `realm_name` set to "Code Realm" and print "Welcome to " + realm_name\n# Write your code below:\n',
             language="python",
             xp_reward=100,
             coin_reward=50,
             explanation="Variables store strings in Python."
         )
-        session.add(ch1)
+        await session.merge(ch1)
 
         tc1 = TestCase(
             challenge_id="starter-1",
@@ -48,25 +52,11 @@ async def seed_database():
             description="Outputs welcome greeting",
             is_hidden=False
         )
-        session.add(tc1)
-
-        # Seed Admin & Explorer User
-        admin_user = User(
-            email="explorer@coderealm.com",
-            username="AetherCoder",
-            hashed_password=hash_password("RealmPassword123!"),
-            role="user"
-        )
-        session.add(admin_user)
-        await session.flush()
-
-        profile = UserProfile(user_id=admin_user.id)
-        skills = SkillRating(user_id=admin_user.id)
-        session.add(profile)
-        session.add(skills)
+        await session.merge(tc1)
 
         await session.commit()
         logger.info("Database seeding completed successfully!")
+
 
 if __name__ == "__main__":
     asyncio.run(seed_database())

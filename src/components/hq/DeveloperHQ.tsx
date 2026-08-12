@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
-import { API_BASE_URL } from '../../services/api';
+import { api } from '../../services/api';
 import { AchievementGallery } from './AchievementGallery';
 import type { Achievement } from '../../types/game';
 import {
@@ -8,8 +8,6 @@ import {
   ArrowUpCircle, Loader, RefreshCw, Bot,
   Zap, Building, Brain
 } from 'lucide-react';
-
-const API_BASE = API_BASE_URL;
 
 const HQ_TIERS = [
   { name: 'Room',          buildings: 0, cost: 0,    desc: 'A simple student study desk.' },
@@ -125,22 +123,15 @@ export const DeveloperHQ: React.FC = () => {
     setIsLoadingBriefing(true);
     setBriefing('');
     try {
-      const resp = await fetch(`${API_BASE}/ai/mentor/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: `Give me a personalized daily coding briefing. My stats:
+      const prompt = `Give me a personalized daily coding briefing. My stats:
 - Level ${profile.level}, ${profile.xp} XP, ${profile.streak}-day streak
 - Completed ${profile.completedNodeIds?.length || 0} challenges
 - Python: ${profile.skills?.python}, Algorithms: ${profile.skills?.algorithms}, Debugging: ${profile.skills?.debugging}
 - Weakest: ${Object.entries(profile.skills || {}).sort(([,a],[,b]) => (a as number)-(b as number))[0]?.[0]}
-Give me: 1 motivational opener, 2 specific daily missions targeting my weakest skills, and a tip. Keep it short and exciting.`,
-          mode: 'Explain',
-          skill_rating: profile.rankRating || 905,
-        }),
-      });
-      const data = await resp.json();
-      setBriefing(data.content || 'The AI Game Master is preparing your briefing...');
+Give me: 1 motivational opener, 2 specific daily missions targeting my weakest skills, and a tip. Keep it short and exciting.`;
+
+      const data = await api.askAiMentor(prompt, 'Explain', profile.rankRating || 905);
+      setBriefing(data?.content || 'The AI Game Master is preparing your briefing...');
     } catch {
       const weakest = Object.entries(profile.skills || {}).sort(([,a],[,b]) => (a as number)-(b as number))[0];
       setBriefing(`Good day, ${profile.username}! Your ${profile.streak}-day streak is legendary. Today, focus on improving ${weakest?.[0] || 'algorithms'} — attempt 3 challenge nodes and aim for all tests passing on first try!`);

@@ -28,7 +28,7 @@ async def run_code_sandbox(req: CodeExecutionRequest):
         }
         for tc in req.test_cases
     ]
-    return await execution_service.execute_python_code(req.code, test_cases)
+    return await execution_service.execute_code(req.code, req.language, test_cases)
 
 
 @router.post("/submit", response_model=ExecutionResponse)
@@ -50,8 +50,9 @@ async def submit_code_solution(
         for tc in req.test_cases
     ]
     
-    # 1. Run the code
-    result = await execution_service.execute_python_code(req.code, test_cases)
+    # 1. Run the code with target language
+    result = await execution_service.execute_code(req.code, req.language, test_cases)
+
     
     # 2. Map Challenge difficulty to an Elo rating
     challenge_rating = 1000

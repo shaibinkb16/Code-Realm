@@ -1,6 +1,12 @@
-// Resolve API base URL with environment override. Defaults to localhost during
-// local development, and to the deployed backend in production.
-const DEFAULT_API = (typeof window !== 'undefined' && window.location.hostname === 'localhost')
+const isLocalhost = typeof window !== 'undefined' && (
+  window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1' ||
+  window.location.hostname === '[::1]' ||
+  window.location.hostname.startsWith('192.168.') ||
+  window.location.hostname.endsWith('.local')
+);
+
+const DEFAULT_API = isLocalhost
   ? 'http://localhost:8000/api/v1'
   : 'https://code-realm.onrender.com/api/v1';
 

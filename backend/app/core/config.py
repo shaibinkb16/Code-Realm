@@ -32,22 +32,25 @@ class Settings(BaseSettings):
         "https://code-realm-frontend.vercel.app",
     ]
 
-    # Relational Database (PostgreSQL)
-    DATABASE_URL: str | None = Field(default=None, env="DATABASE_URL")
-    POSTGRES_USER: str = Field(default="coderealm", env="POSTGRES_USER")
-    POSTGRES_PASSWORD: str = Field(default="coderealm_secret_pwd", env="POSTGRES_PASSWORD")
-    POSTGRES_SERVER: str = Field(default="localhost", env="POSTGRES_SERVER")
-    POSTGRES_PORT: str = Field(default="5432", env="POSTGRES_PORT")
-    POSTGRES_DB: str = Field(default="coderealm_db", env="POSTGRES_DB")
+    # Supabase & Database Credentials
+    SUPABASE_URL: str = Field(default="https://havkceybcieaemlsevdk.supabase.co", env="SUPABASE_URL")
+    SUPABASE_KEY: str = Field(default="sb_publishable_Etj7XIJGxyY5NzMuwSHPvg_BY4IBPPI", env="SUPABASE_KEY")
+    DATABASE_URL: str = Field(
+        default="postgresql+asyncpg://postgres.havkceybcieaemlsevdk:Shaibinkb%402002@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres",
+        env="DATABASE_URL"
+    )
+
+    # Fallback MongoDB Credentials
+    MONGODB_URL: str = Field(
+        default="mongodb+srv://shaibinkb16:Shaibinkb16@cluster0.eh9qaa6.mongodb.net/?appName=Cluster0",
+        env="MONGODB_URL"
+    )
 
     @property
     def ASYNC_DATABASE_URI(self) -> str:
-        if self.DATABASE_URL:
-            return self.DATABASE_URL.replace("postgres://", "postgresql+asyncpg://").replace("postgresql://", "postgresql+asyncpg://")
-        return (
-            f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
-            f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-        )
+        url = self.DATABASE_URL
+        return url.replace("postgres://", "postgresql+asyncpg://").replace("postgresql://", "postgresql+asyncpg://")
+
 
     # Redis Cache & Rate Limiting
     REDIS_URL: str | None = Field(default=None, env="REDIS_URL")
@@ -60,8 +63,11 @@ class Settings(BaseSettings):
             return self.REDIS_URL
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/0"
 
-    # AI Model Integration
+    # AI Model Integrations & Fallbacks
     AI_API_KEY: str = Field(default="", env="AI_API_KEY")
+    GROQ_API_KEY: str = Field(default="", env="GROQ_API_KEY")
+
+
 
     # SMTP / Email Configuration
     SMTP_HOST: str = Field(default="smtp.gmail.com", env="SMTP_HOST")
