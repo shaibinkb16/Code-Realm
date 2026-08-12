@@ -16,15 +16,16 @@ class ExecutionService:
     async def _execute_python_locally(user_code: str, test_cases: List[Dict[str, Any]]) -> Dict[str, Any]:
         start_time = time.time()
         
-        # Escape user code properly for string interpolation
-        escaped_user_code = user_code.replace('\"\"\"', '\\\"\\\"\\\"')
+        # Escape user code properly for string interpolation by escaping single triple-quotes
+        escaped_user_code = user_code.replace("'''", "\\'\\'\\'")
         
-        runner_code = f\"\"\"
+        runner_code = f"""
 import sys
 import io
 
-user_code = \"\"\"{escaped_user_code}\"\"\"
+user_code = '''{escaped_user_code}'''
 test_cases = {test_cases}
+
 
 print('===RESULTS_START===')
 for i, tc in enumerate(test_cases):
@@ -50,7 +51,7 @@ for i, tc in enumerate(test_cases):
     
     print(output.strip())
     print(f'---ERR_{{i}}---')
-\"\"\"
+"""
 
         try:
             with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
@@ -89,10 +90,11 @@ for i, tc in enumerate(test_cases):
                     tc_block = results_section.split(marker_out)[1]
                     if next_marker in tc_block:
                         tc_block = tc_block.split(next_marker)[0]
-                    actual_stdout = tc_block.split(marker_err)[0].strip()
+                    actual_stdout = tc_block.split(marker_err)[0].strip().replace('\r\n', '\n')
                 except IndexError:
                     actual_stdout = ""
                     
+                expected = expected.replace('\r\n', '\n')
                 passed = (actual_stdout == expected)
                 if not passed:
                     all_passed = False
