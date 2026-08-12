@@ -23,7 +23,10 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-config.set_main_option("sqlalchemy.url", settings.ASYNC_DATABASE_URI)
+# ConfigParser (used internally by Alembic) treats '%' as an interpolation
+# escape character. URLs with percent-encoded chars (e.g. %40 for '@') must
+# have their '%' doubled so ConfigParser passes them through verbatim.
+config.set_main_option("sqlalchemy.url", settings.ASYNC_DATABASE_URI.replace("%", "%%"))
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
