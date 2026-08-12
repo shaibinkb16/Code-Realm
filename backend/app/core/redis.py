@@ -1,3 +1,4 @@
+import ssl as _ssl
 import redis.asyncio as redis
 from arq import create_pool
 from arq.connections import RedisSettings
@@ -11,17 +12,22 @@ class RedisManager:
 
     async def connect(self):
         try:
+            uri = settings.REDIS_URI
             client = redis.from_url(
-                settings.REDIS_URI,
+                uri,
                 encoding="utf-8",
                 decode_responses=True,
-                socket_connect_timeout=2
+                socket_connect_timeout=5,
             )
             await client.ping()
             self.redis_client = client
-            
-            # Init ARQ connection pool
-            self.arq_pool = await create_pool(RedisSettings.from_dsn(settings.REDIS_URI))
+
+            # Init ARQ connection pool — pass ssl=True for Upstash (rediss://)
+            use_ssl = uri.startswith("rediss://")
+            arq_settings = RedisSettings.from_dsn(uri)
+            if use_ssl:
+                arq_settings.ssl = _ssl.create_default_context()
+            self.arq_pool = await create_pool(arq_settings)
             logger.info("Connected to Redis successfully.")
         except Exception as e:
             logger.warning(f"[Redis] Offline or connection failed: {e}. Fallback in-memory mode active.")
