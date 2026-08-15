@@ -155,3 +155,315 @@ async def refresh_token(request: RefreshTokenRequest):
 async def get_my_profile(current_user: User = Depends(get_current_user)):
     """Returns currently authenticated user profile and skill details."""
     return current_user
+
+import secrets
+from urllib.parse import urlencode
+import httpx
+from fastapi.responses import RedirectResponse
+from app.core.config import settings
+from app.core.logging import logger
+
+@router.get("/google")
+async def google_login():
+    """Initiates Google OAuth 2.0 authorization flow."""
+    state = secrets.token_urlsafe(32)
+    await redis_manager.set(f"oauth_state:{state}", "1", ttl=600)
+
+    params = {
+        "client_id": settings.GOOGLE_CLIENT_ID,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+        "state": state,
+        "access_type": "offline",
+        "prompt": "select_account"
+    }
+    google_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
+    return RedirectResponse(url=google_url, status_code=307)
+
+@router.get("/google/callback")
+async def google_callback(
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Processes Google OAuth callback code, verifies identity, provisions user, and redirects with JWT tokens."""
+    frontend_base = settings.FRONTEND_URL.rstrip('/')
+    
+    if error or not code:
+        logger.warning(f"Google OAuth callback error or missing code: error={error}")
+        return RedirectResponse(url=f"{frontend_base}/#auth_error?message=Google%20Authentication%20Cancelled", status_code=307)
+
+    # 1. Validate CSRF state
+    if state:
+        stored_state = await redis_manager.get(f"oauth_state:{state}")
+        if stored_state:
+            await redis_manager.delete(f"oauth_state:{state}")
+    
+    # 2. Exchange authorization code with Google
+    token_url = "https://oauth2.googleapis.com/token"
+    token_data = {
+        "client_id": settings.GOOGLE_CLIENT_ID,
+        "client_secret": settings.GOOGLE_CLIENT_SECRET,
+        "code": code,
+        "grant_type": "authorization_code",
+        "redirect_uri": settings.GOOGLE_REDIRECT_URI
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            res = await client.post(token_url, data=token_data)
+            if res.status_code != 200:
+                logger.error(f"Failed to exchange Google OAuth code: {res.text}")
+                return RedirectResponse(url=f"{frontend_base}/#auth_error?message=Failed%20to%20exchange%20authorization%20code", status_code=307)
+            tokens = res.json()
+            google_access_token = tokens.get("access_token")
+
+            # 3. Retrieve user identity profile from Google
+            userinfo_res = await client.get(
+                "https://www.googleapis.com/oauth2/v3/userinfo",
+                headers={"Authorization": f"Bearer {google_access_token}"}
+            )
+            if userinfo_res.status_code != 200:
+                logger.error(f"Failed to fetch Google user info: {userinfo_res.text}")
+                return RedirectResponse(url=f"{frontend_base}/#auth_error?message=Failed%20to%20fetch%20user%20profile%20from%20Google", status_code=307)
+            
+            user_info = userinfo_res.json()
+    except Exception as e:
+        logger.error(f"Google OAuth network error: {str(e)}")
+        return RedirectResponse(url=f"{frontend_base}/#auth_error?message=Google%20service%20connection%20failed", status_code=307)
+
+    google_id = user_info.get("sub")
+    raw_email = user_info.get("email")
+    name = user_info.get("name") or user_info.get("given_name") or "Coder"
+    picture = user_info.get("picture")
+
+    if not google_id or not raw_email:
+        return RedirectResponse(url=f"{frontend_base}/#auth_error?message=Invalid%20Google%20profile%20payload", status_code=307)
+
+    clean_email = raw_email.strip().lower()
+
+    # 4. User Lookup & Link / Provisioning
+    res = await db.execute(
+        select(User).options(selectinload(User.profile)).where(User.google_id == google_id)
+    )
+    user = res.scalars().first()
+
+    if not user:
+        res_email = await db.execute(
+            select(User).options(selectinload(User.profile)).where(func.lower(User.email) == clean_email)
+        )
+        user = res_email.scalars().first()
+
+        if user:
+            # Link existing account by email
+            user.google_id = google_id
+            user.auth_provider = "google"
+            user.is_active = True
+            if picture and user.profile and (not user.profile.avatar or "unsplash" in user.profile.avatar):
+                user.profile.avatar = picture
+        else:
+            # Auto-provision new user
+            base_username = "".join(c for c in name if c.isalnum()) or clean_email.split("@")[0]
+            base_username = base_username[:30]
+            
+            final_username = base_username
+            counter = 1
+            while True:
+                existing_u = await db.execute(select(User).where(func.lower(User.username) == final_username.lower()))
+                if not existing_u.scalars().first():
+                    break
+                final_username = f"{base_username[:25]}_{counter}"
+                counter += 1
+
+            import uuid
+            new_user = User(
+                email=clean_email,
+                username=final_username,
+                hashed_password=hash_password(str(uuid.uuid4())),
+                google_id=google_id,
+                auth_provider="google",
+                role="user",
+                is_active=True
+            )
+            db.add(new_user)
+            await db.flush()
+
+            profile = UserProfile(
+                user_id=new_user.id,
+                avatar=picture or "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80"
+            )
+            db.add(profile)
+            user = new_user
+
+    await db.commit()
+
+    # 5. Issue Code Realm JWT tokens
+    access_token = create_access_token(subject=str(user.id))
+    refresh_token = create_refresh_token(subject=str(user.id))
+
+    redirect_url = f"{frontend_base}/#auth_callback?access_token={access_token}&refresh_token={refresh_token}"
+    return RedirectResponse(url=redirect_url, status_code=307)
+
+@router.get("/github")
+async def github_login():
+    """Initiates GitHub OAuth 2.0 authorization flow."""
+    state = secrets.token_urlsafe(32)
+    await redis_manager.set(f"oauth_state:{state}", "1", ttl=600)
+
+    params = {
+        "client_id": settings.GITHUB_CLIENT_ID,
+        "redirect_uri": settings.GITHUB_REDIRECT_URI,
+        "scope": "read:user user:email",
+        "state": state
+    }
+    github_url = f"https://github.com/login/oauth/authorize?{urlencode(params)}"
+    return RedirectResponse(url=github_url, status_code=307)
+
+@router.get("/github/callback")
+async def github_callback(
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Processes GitHub OAuth callback, verifies identity, retrieves user emails, provisions user, and redirects with JWT tokens."""
+    frontend_base = settings.FRONTEND_URL.rstrip('/')
+    
+    if error or not code:
+        logger.warning(f"GitHub OAuth callback error or missing code: error={error}")
+        return RedirectResponse(url=f"{frontend_base}/#auth_error?message=GitHub%20Authentication%20Cancelled", status_code=307)
+
+    # 1. Validate CSRF state
+    if state:
+        stored_state = await redis_manager.get(f"oauth_state:{state}")
+        if stored_state:
+            await redis_manager.delete(f"oauth_state:{state}")
+
+    # 2. Exchange authorization code with GitHub
+    token_url = "https://github.com/login/oauth/access_token"
+    token_payload = {
+        "client_id": settings.GITHUB_CLIENT_ID,
+        "client_secret": settings.GITHUB_CLIENT_SECRET,
+        "code": code,
+        "redirect_uri": settings.GITHUB_REDIRECT_URI
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            res = await client.post(token_url, json=token_payload, headers={"Accept": "application/json"})
+            if res.status_code != 200:
+                logger.error(f"Failed to exchange GitHub OAuth code: {res.text}")
+                return RedirectResponse(url=f"{frontend_base}/#auth_error?message=Failed%20to%20exchange%20GitHub%20code", status_code=307)
+            tokens = res.json()
+            github_access_token = tokens.get("access_token")
+
+            if not github_access_token:
+                logger.error(f"GitHub OAuth token missing from response: {tokens}")
+                return RedirectResponse(url=f"{frontend_base}/#auth_error?message=Invalid%20GitHub%20access%20token", status_code=307)
+
+            # 3. Retrieve user profile from GitHub API
+            gh_headers = {
+                "Authorization": f"Bearer {github_access_token}",
+                "User-Agent": "CodeRealm-OAuth",
+                "Accept": "application/vnd.github.v3+json"
+            }
+            user_res = await client.get("https://api.github.com/user", headers=gh_headers)
+            if user_res.status_code != 200:
+                logger.error(f"Failed to fetch GitHub user profile: {user_res.text}")
+                return RedirectResponse(url=f"{frontend_base}/#auth_error?message=Failed%20to%20fetch%20GitHub%20user", status_code=307)
+            
+            user_data = user_res.json()
+            
+            # Fetch user email (if private on profile)
+            primary_email = user_data.get("email")
+            if not primary_email:
+                emails_res = await client.get("https://api.github.com/user/emails", headers=gh_headers)
+                if emails_res.status_code == 200:
+                    emails_data = emails_res.json()
+                    for email_obj in emails_data:
+                        if email_obj.get("primary") and email_obj.get("verified"):
+                            primary_email = email_obj.get("email")
+                            break
+                    if not primary_email and emails_data:
+                        primary_email = emails_data[0].get("email")
+    except Exception as e:
+        logger.error(f"GitHub OAuth network error: {str(e)}")
+        return RedirectResponse(url=f"{frontend_base}/#auth_error?message=GitHub%20service%20connection%20failed", status_code=307)
+
+    github_id = str(user_data.get("id"))
+    github_username = user_data.get("login") or "github_coder"
+    name = user_data.get("name") or github_username
+    avatar_url = user_data.get("avatar_url")
+
+    if not github_id:
+        return RedirectResponse(url=f"{frontend_base}/#auth_error?message=Invalid%20GitHub%20user%20ID", status_code=307)
+
+    clean_email = (primary_email or f"{github_username.lower()}@github.coderealm.dev").strip().lower()
+
+    # 4. User Lookup & Linking / Provisioning
+    res = await db.execute(
+        select(User).options(selectinload(User.profile)).where(User.github_id == github_id)
+    )
+    user = res.scalars().first()
+
+    if not user:
+        res_email = await db.execute(
+            select(User).options(selectinload(User.profile)).where(func.lower(User.email) == clean_email)
+        )
+        user = res_email.scalars().first()
+
+        if user:
+            # Link existing user account with GitHub
+            user.github_id = github_id
+            user.github_username = github_username
+            user.auth_provider = "github"
+            user.is_active = True
+            if avatar_url and user.profile and (not user.profile.avatar or "unsplash" in user.profile.avatar):
+                user.profile.avatar = avatar_url
+        else:
+            # Auto-provision new user
+            base_username = "".join(c for c in github_username if c.isalnum()) or "Coder"
+            base_username = base_username[:30]
+
+            final_username = base_username
+            counter = 1
+            while True:
+                existing_u = await db.execute(select(User).where(func.lower(User.username) == final_username.lower()))
+                if not existing_u.scalars().first():
+                    break
+                final_username = f"{base_username[:25]}_{counter}"
+                counter += 1
+
+            import uuid
+            new_user = User(
+                email=clean_email,
+                username=final_username,
+                hashed_password=hash_password(str(uuid.uuid4())),
+                github_id=github_id,
+                github_username=github_username,
+                auth_provider="github",
+                role="user",
+                is_active=True
+            )
+            db.add(new_user)
+            await db.flush()
+
+            profile = UserProfile(
+                user_id=new_user.id,
+                avatar=avatar_url or "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80"
+            )
+            db.add(profile)
+            user = new_user
+
+    await db.commit()
+
+    # 5. Issue application JWT tokens
+    access_token = create_access_token(subject=str(user.id))
+    refresh_token = create_refresh_token(subject=str(user.id))
+
+    redirect_url = f"{frontend_base}/#auth_callback?access_token={access_token}&refresh_token={refresh_token}"
+    return RedirectResponse(url=redirect_url, status_code=307)
+
+

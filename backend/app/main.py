@@ -56,6 +56,7 @@ app.add_exception_handler(Exception, global_exception_handler)
 # Include Routers
 app.include_router(health_router, tags=["Health"])
 app.include_router(auth_router, prefix=f"{settings.API_V1_STR}/auth", tags=["Auth"])
+app.include_router(auth_router, prefix="/api/auth", tags=["Google OAuth Root"])
 app.include_router(execution_router, prefix=f"{settings.API_V1_STR}/execute", tags=["Code Execution"])
 app.include_router(ai_router, prefix=f"{settings.API_V1_STR}/ai/mentor", tags=["AI Mentor"])
 app.include_router(challenges_router, prefix=f"{settings.API_V1_STR}/challenges", tags=["Challenges"])

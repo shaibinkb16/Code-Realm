@@ -76,6 +76,27 @@ class Settings(BaseSettings):
     SMTP_PASS: str = Field(default="", env="SMTP_PASS")
     SMTP_FROM: str = Field(default="noreply@coderealm.dev", env="SMTP_FROM")
 
+    # Google OAuth Configuration
+    GOOGLE_CLIENT_ID: str = Field(default="", env="GOOGLE_CLIENT_ID")
+    GOOGLE_CLIENT_SECRET: str = Field(default="", env="GOOGLE_CLIENT_SECRET")
+    GOOGLE_REDIRECT_URI: str = Field(
+        default="http://localhost:8000/api/auth/google/callback",
+        env="GOOGLE_REDIRECT_URI"
+    )
+
+    # GitHub OAuth Configuration
+    GITHUB_CLIENT_ID: str = Field(default="", env="GITHUB_CLIENT_ID")
+    GITHUB_CLIENT_SECRET: str = Field(default="", env="GITHUB_CLIENT_SECRET")
+    GITHUB_REDIRECT_URI: str = Field(
+        default="http://localhost:8000/api/auth/github/callback",
+        env="GITHUB_REDIRECT_URI"
+    )
+
+    FRONTEND_URL: str = Field(
+        default="http://localhost:5173",
+        env="FRONTEND_URL"
+    )
+
     class Config:
         case_sensitive = True
         env_file = "../.env"

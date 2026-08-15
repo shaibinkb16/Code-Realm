@@ -19,6 +19,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const fetchUser = async () => {
     try {
+      // Check for OAuth tokens in URL hash or search params
+      const hash = window.location.hash || '';
+      const search = window.location.search || '';
+      const queryString = hash.includes('?') ? hash.split('?')[1] : (search.startsWith('?') ? search.substring(1) : hash.replace('#', ''));
+      const params = new URLSearchParams(queryString);
+      
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+
+      if (accessToken) {
+        localStorage.setItem('coderealm_token', accessToken);
+        if (refreshToken) {
+          localStorage.setItem('coderealm_refresh_token', refreshToken);
+        }
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+
       const token = localStorage.getItem('coderealm_token');
       if (token) {
         const userData = await api.getMe();
