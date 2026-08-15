@@ -221,12 +221,13 @@ p {
   width: 100%;
   max-width: 1200px;
   margin: 0 auto;
+  padding: 0 var(--space-2);
 }
 
 .grid-responsive {
   display: grid;
   gap: var(--space-4);
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
 }
 
 .flex-center {
@@ -245,7 +246,10 @@ p {
 .app-container {
   display: flex;
   min-height: 100vh;
+  min-height: 100dvh;
   background-color: var(--bg-dark);
+  width: 100%;
+  overflow-x: hidden;
 }
 
 .sidebar {
@@ -284,6 +288,7 @@ p {
   display: grid;
   grid-template-columns: 320px 1fr 300px;
   height: calc(100vh - 56px);
+  height: calc(100dvh - 56px);
   background-color: var(--bg-dark);
   overflow: hidden;
 }
@@ -292,6 +297,7 @@ p {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-width: 0;
 }
 
 .challenge-panel-scrollable {
@@ -314,6 +320,12 @@ p {
   display: none;
 }
 
+@media (max-width: 1280px) and (min-width: 1025px) {
+  .challenge-workspace {
+    grid-template-columns: 280px 1fr 260px;
+  }
+}
+
 @media (max-width: 1024px) {
   .sidebar {
     transform: translateX(-100%);
@@ -332,7 +344,7 @@ p {
     display: none; /* hide button labels on mobile header */
   }
   .hide-mobile {
-    display: none;
+    display: none !important;
   }
   .mobile-menu-btn {
     display: inline-flex;
@@ -349,13 +361,23 @@ p {
   .challenge-workspace {
     grid-template-columns: 1fr;
     height: auto;
+    min-height: calc(100dvh - 56px);
     overflow-y: auto;
   }
   
   .challenge-panel {
     border-right: none !important;
     border-bottom: 1px solid var(--border-subtle);
-    min-height: 50vh;
+    min-height: 400px;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --page-padding: 12px;
+  }
+  .header-bar {
+    padding: 0 12px;
   }
 }
 

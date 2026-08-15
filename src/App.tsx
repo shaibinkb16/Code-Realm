@@ -17,6 +17,8 @@ import { Championship } from './components/championship/Championship';
 import { DeveloperHQ } from './components/hq/DeveloperHQ';
 import { CareerCompany } from './components/career/CareerCompany';
 import { PlayerProfileView } from './components/profile/PlayerProfile';
+import { AdminConsole } from './components/admin/AdminConsole';
+import { AdminDashboardPortal } from './components/admin/AdminDashboardPortal';
 import { Sparkles } from 'lucide-react';
 
 const MainAppContent: React.FC = () => {
@@ -44,6 +46,8 @@ const MainAppContent: React.FC = () => {
         return <CareerCompany />;
       case 'profile':
         return <PlayerProfileView />;
+      case 'admin':
+        return <AdminConsole />;
       default:
         return <WorldMap />;
     }
@@ -89,6 +93,7 @@ const MainAppContent: React.FC = () => {
 
 const AppContent: React.FC = () => {
   const { user, isLoading } = useAuth();
+  const [isPreviewStudentView, setIsPreviewStudentView] = useState(false);
 
   if (isLoading) {
     return (
@@ -105,8 +110,24 @@ const AppContent: React.FC = () => {
     return <AuthView />;
   }
 
+  // Administrators log directly into the dedicated Admin Dashboard Portal
+  if ((user.role === 'admin' || user.role === 'super_admin') && !isPreviewStudentView) {
+    return <AdminDashboardPortal onSwitchToStudentView={() => setIsPreviewStudentView(true)} />;
+  }
+
   return (
     <GameProvider>
+      {(user.role === 'admin' || user.role === 'super_admin') && isPreviewStudentView && (
+        <div style={{ background: '#ef4444', color: '#ffffff', padding: '6px 16px', fontSize: '12px', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 9999 }}>
+          <span>👁️ PREVIEW MODE: You are currently previewing the Student Gaming Interface as {user.username}.</span>
+          <button
+            onClick={() => setIsPreviewStudentView(false)}
+            style={{ background: '#ffffff', color: '#dc2626', border: 'none', padding: '4px 10px', borderRadius: '4px', fontWeight: 800, cursor: 'pointer', fontSize: '11px' }}
+          >
+            ← Return to Admin Control Tower
+          </button>
+        </div>
+      )}
       <MainAppContent />
     </GameProvider>
   );

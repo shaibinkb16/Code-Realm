@@ -23,7 +23,8 @@ async def call_llm_with_fallback(
         # TIER 1: GOOGLE GEMINI MODELS
         # ─────────────────────────────────────────────
         if settings.AI_API_KEY and len(settings.AI_API_KEY.strip()) > 5:
-            gemini_models = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.0-flash", "gemini-1.5-flash"]
+            gemini_model = settings.GEMINI_MODEL.strip() if settings.GEMINI_MODEL else "gemini-3.6-flash"
+            gemini_models = [gemini_model]
             payload = {
                 "system_instruction": {"parts": [{"text": system_prompt}]},
                 "contents": [{"parts": [{"text": user_prompt}]}],

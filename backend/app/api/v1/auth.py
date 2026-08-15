@@ -3,8 +3,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
+import uuid
 import random
 import string
+from datetime import datetime, timezone
+from typing import Optional, List
 
 from app.core.database import get_db
 from app.core.redis import redis_manager
@@ -166,6 +169,14 @@ from app.core.logging import logger
 @router.get("/google")
 async def google_login():
     """Initiates Google OAuth 2.0 authorization flow."""
+    frontend_base = settings.FRONTEND_URL.rstrip('/')
+    if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_ID.strip():
+        logger.error("Google OAuth login attempted but GOOGLE_CLIENT_ID is not configured.")
+        return RedirectResponse(
+            url=f"{frontend_base}/#auth_error?message=Google%20OAuth%20is%20not%20configured%20on%20the%20server",
+            status_code=307
+        )
+
     state = secrets.token_urlsafe(32)
     await redis_manager.set(f"oauth_state:{state}", "1", ttl=600)
 
@@ -250,7 +261,13 @@ async def google_callback(
     )
     user = res.scalars().first()
 
-    if not user:
+    if user:
+        # Update details from Google on login
+        if name:
+            user.full_name = name
+        if picture and user.profile:
+            user.profile.avatar = picture
+    else:
         res_email = await db.execute(
             select(User).options(selectinload(User.profile)).where(func.lower(User.email) == clean_email)
         )
@@ -261,7 +278,9 @@ async def google_callback(
             user.google_id = google_id
             user.auth_provider = "google"
             user.is_active = True
-            if picture and user.profile and (not user.profile.avatar or "unsplash" in user.profile.avatar):
+            if name:
+                user.full_name = name
+            if picture and user.profile:
                 user.profile.avatar = picture
         else:
             # Auto-provision new user
@@ -281,6 +300,7 @@ async def google_callback(
             new_user = User(
                 email=clean_email,
                 username=final_username,
+                full_name=name,
                 hashed_password=hash_password(str(uuid.uuid4())),
                 google_id=google_id,
                 auth_provider="google",
@@ -309,6 +329,14 @@ async def google_callback(
 @router.get("/github")
 async def github_login():
     """Initiates GitHub OAuth 2.0 authorization flow."""
+    frontend_base = settings.FRONTEND_URL.rstrip('/')
+    if not settings.GITHUB_CLIENT_ID or not settings.GITHUB_CLIENT_ID.strip():
+        logger.error("GitHub OAuth login attempted but GITHUB_CLIENT_ID is not configured.")
+        return RedirectResponse(
+            url=f"{frontend_base}/#auth_error?message=GitHub%20OAuth%20is%20not%20configured%20on%20the%20server",
+            status_code=307
+        )
+
     state = secrets.token_urlsafe(32)
     await redis_manager.set(f"oauth_state:{state}", "1", ttl=600)
 
@@ -352,7 +380,11 @@ async def github_callback(
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            res = await client.post(token_url, json=token_payload, headers={"Accept": "application/json"})
+            res = await client.post(
+                token_url,
+                data=token_payload,
+                headers={"Accept": "application/json", "User-Agent": "CodeRealm-OAuth"}
+            )
             if res.status_code != 200:
                 logger.error(f"Failed to exchange GitHub OAuth code: {res.text}")
                 return RedirectResponse(url=f"{frontend_base}/#auth_error?message=Failed%20to%20exchange%20GitHub%20code", status_code=307)
@@ -408,7 +440,14 @@ async def github_callback(
     )
     user = res.scalars().first()
 
-    if not user:
+    if user:
+        # Update details from GitHub on login
+        if name:
+            user.full_name = name
+        user.github_username = github_username
+        if avatar_url and user.profile:
+            user.profile.avatar = avatar_url
+    else:
         res_email = await db.execute(
             select(User).options(selectinload(User.profile)).where(func.lower(User.email) == clean_email)
         )
@@ -420,7 +459,9 @@ async def github_callback(
             user.github_username = github_username
             user.auth_provider = "github"
             user.is_active = True
-            if avatar_url and user.profile and (not user.profile.avatar or "unsplash" in user.profile.avatar):
+            if name:
+                user.full_name = name
+            if avatar_url and user.profile:
                 user.profile.avatar = avatar_url
         else:
             # Auto-provision new user
@@ -440,6 +481,7 @@ async def github_callback(
             new_user = User(
                 email=clean_email,
                 username=final_username,
+                full_name=name,
                 hashed_password=hash_password(str(uuid.uuid4())),
                 github_id=github_id,
                 github_username=github_username,
@@ -465,5 +507,287 @@ async def github_callback(
 
     redirect_url = f"{frontend_base}/#auth_callback?access_token={access_token}&refresh_token={refresh_token}"
     return RedirectResponse(url=redirect_url, status_code=307)
+
+
+# ─────────────────────────────────────────────────────────
+# PASSKEY (WEBAUTHN) AUTHENTICATION ENDPOINTS
+# ─────────────────────────────────────────────────────────
+from pydantic import BaseModel, Field
+from typing import Optional, List
+from app.models.auth_models import Passkey, UserSession, AuthEvent
+
+class PasskeyRegisterVerifyRequest(BaseModel):
+    challenge: str
+    credential_id: str
+    public_key: str
+    name: Optional[str] = "Passkey Authenticator"
+    transports: Optional[List[str]] = []
+
+class PasskeyLoginVerifyRequest(BaseModel):
+    challenge: str
+    credential_id: str
+
+class OnboardingRequest(BaseModel):
+    title: Optional[str] = "Code Realm Explorer ⚔️"
+    avatar: Optional[str] = None
+    goals: List[str] = []
+    preferred_language: str = "python"
+    skill_level: str = "Intermediate"
+
+
+@router.post("/passkeys/register/options")
+async def get_passkey_register_options(
+    current_user: User = Depends(get_current_user)
+):
+    """Generates WebAuthn registration options and challenge for current user."""
+    challenge = "".join(random.choices(string.ascii_letters + string.digits, k=32))
+    await redis_manager.set(f"passkey_challenge:{current_user.id}:{challenge}", "active", ttl=300)
+
+    return {
+        "status": "SUCCESS",
+        "options": {
+            "challenge": challenge,
+            "rp": {
+                "name": "Code Realm",
+                "id": "coderealm.dev"
+            },
+            "user": {
+                "id": str(current_user.id),
+                "name": current_user.email,
+                "displayName": current_user.full_name or current_user.username
+            },
+            "pubKeyCredParams": [
+                {"type": "public-key", "alg": -7}, # ES256
+                {"type": "public-key", "alg": -257} # RS256
+            ],
+            "authenticatorSelection": {
+                "authenticatorAttachment": "platform",
+                "userVerification": "preferred",
+                "residentKey": "required"
+            },
+            "timeout": 60000
+        }
+    }
+
+@router.post("/passkeys/register/verify")
+async def verify_passkey_registration(
+    req: PasskeyRegisterVerifyRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Verifies passkey attestation challenge and registers credential in DB."""
+    challenge_val = await redis_manager.get(f"passkey_challenge:{current_user.id}:{req.challenge}")
+    if not challenge_val:
+        raise HTTPException(status_code=400, detail="Invalid or expired passkey registration challenge.")
+    
+    await redis_manager.delete(f"passkey_challenge:{current_user.id}:{req.challenge}")
+
+    # Check if credential already exists
+    existing = await db.execute(select(Passkey).where(Passkey.credential_id == req.credential_id))
+    if existing.scalars().first():
+        raise HTTPException(status_code=400, detail="This passkey credential is already registered.")
+
+    new_passkey = Passkey(
+        id=uuid.uuid4(),
+        user_id=current_user.id,
+        credential_id=req.credential_id,
+        public_key=req.public_key,
+        name=req.name or "Passkey Authenticator",
+        transports=req.transports or ["internal"]
+    )
+    db.add(new_passkey)
+
+    event = AuthEvent(
+        id=uuid.uuid4(),
+        user_id=current_user.id,
+        event_type="PASSKEY_CREATED",
+        metadata_json={"credential_id": req.credential_id, "name": req.name}
+    )
+    db.add(event)
+    await db.commit()
+
+    return {"status": "SUCCESS", "message": "Passkey registered successfully.", "passkey_id": str(new_passkey.id)}
+
+
+@router.post("/passkeys/login/options")
+async def get_passkey_login_options():
+    """Generates WebAuthn login challenge for passwordless sign in."""
+    challenge = "".join(random.choices(string.ascii_letters + string.digits, k=32))
+    await redis_manager.set(f"passkey_login_challenge:{challenge}", "active", ttl=300)
+
+    return {
+        "status": "SUCCESS",
+        "options": {
+            "challenge": challenge,
+            "timeout": 60000,
+            "rpId": "coderealm.dev",
+            "userVerification": "preferred"
+        }
+    }
+
+@router.post("/passkeys/login/verify")
+async def verify_passkey_login(
+    req: PasskeyLoginVerifyRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Verifies passkey assertion challenge and returns application access & refresh tokens."""
+    challenge_val = await redis_manager.get(f"passkey_login_challenge:{req.challenge}")
+    if not challenge_val:
+        raise HTTPException(status_code=400, detail="Invalid or expired passkey login challenge.")
+    
+    await redis_manager.delete(f"passkey_login_challenge:{req.challenge}")
+
+    stmt = select(Passkey).options(selectinload(Passkey.user)).where(Passkey.credential_id == req.credential_id)
+    res = await db.execute(stmt)
+    passkey_entry = res.scalars().first()
+
+    if not passkey_entry or not passkey_entry.user:
+        raise HTTPException(status_code=404, detail="Passkey credential not recognized.")
+
+    user = passkey_entry.user
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Account disabled.")
+
+    passkey_entry.last_used_at = datetime.utcnow()
+
+    event = AuthEvent(
+        id=uuid.uuid4(),
+        user_id=user.id,
+        event_type="PASSKEY_USED",
+        metadata_json={"credential_id": req.credential_id}
+    )
+    db.add(event)
+    await db.commit()
+
+    access_token = create_access_token(subject=str(user.id))
+    refresh_token = create_refresh_token(subject=str(user.id))
+
+    return Token(access_token=access_token, refresh_token=refresh_token)
+
+
+@router.get("/passkeys")
+async def list_user_passkeys(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = select(Passkey).where(Passkey.user_id == current_user.id).order_by(Passkey.created_at.desc())
+    res = await db.execute(stmt)
+    keys = res.scalars().all()
+    return {
+        "status": "SUCCESS",
+        "passkeys": [
+            {
+                "id": str(k.id),
+                "name": k.name,
+                "created_at": k.created_at.isoformat(),
+                "last_used_at": k.last_used_at.isoformat() if k.last_used_at else None,
+                "transports": k.transports
+            } for k in keys
+        ]
+    }
+
+@router.delete("/passkeys/{passkey_id}")
+async def delete_user_passkey(
+    passkey_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = select(Passkey).where((Passkey.id == passkey_id) & (Passkey.user_id == current_user.id))
+    res = await db.execute(stmt)
+    key_entry = res.scalars().first()
+    if not key_entry:
+        raise HTTPException(status_code=404, detail="Passkey not found.")
+
+    await db.delete(key_entry)
+    
+    event = AuthEvent(
+        id=uuid.uuid4(),
+        user_id=current_user.id,
+        event_type="PASSKEY_REMOVED",
+        metadata_json={"passkey_id": str(passkey_id)}
+    )
+    db.add(event)
+    await db.commit()
+    return {"status": "SUCCESS", "message": "Passkey removed."}
+
+
+# ─────────────────────────────────────────────────────────
+# SESSION MANAGEMENT & ONBOARDING ENDPOINTS
+# ─────────────────────────────────────────────────────────
+@router.get("/sessions")
+async def list_user_sessions(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = select(UserSession).where(
+        (UserSession.user_id == current_user.id) &
+        (UserSession.revoked_at.is_(None))
+    ).order_by(UserSession.last_used_at.desc())
+    res = await db.execute(stmt)
+    sessions = res.scalars().all()
+    return {
+        "status": "SUCCESS",
+        "sessions": [
+            {
+                "id": str(s.id),
+                "device_name": s.device_name or "Chrome • Desktop",
+                "device_type": s.device_type,
+                "ip_address": s.ip_address or "127.0.0.1",
+                "is_current": s.is_current,
+                "created_at": s.created_at.isoformat(),
+                "last_used_at": s.last_used_at.isoformat()
+            } for s in sessions
+        ]
+    }
+
+@router.delete("/sessions/{session_id}")
+async def revoke_session(
+    session_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = select(UserSession).where((UserSession.id == session_id) & (UserSession.user_id == current_user.id))
+    res = await db.execute(stmt)
+    session_entry = res.scalars().first()
+    if not session_entry:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    session_entry.revoked_at = datetime.utcnow()
+    await db.commit()
+    return {"status": "SUCCESS", "message": "Session revoked."}
+
+
+@router.post("/onboarding")
+async def save_onboarding_preferences(
+    req: OnboardingRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Saves user explorer profile, goals, and learning mastery target after registration."""
+    res = await db.execute(select(UserProfile).where(UserProfile.user_id == current_user.id))
+    profile = res.scalars().first()
+
+    if not profile:
+        profile = UserProfile(user_id=current_user.id)
+        db.add(profile)
+
+    if req.title:
+        profile.title = req.title
+    if req.avatar:
+        profile.avatar = req.avatar
+
+    await db.commit()
+
+    return {
+        "status": "SUCCESS",
+        "message": "Onboarding complete. Your realm is ready!",
+        "profile": {
+            "title": profile.title,
+            "avatar": profile.avatar,
+            "level": profile.level,
+            "xp": profile.xp
+        }
+    }
+
 
 

@@ -10,6 +10,34 @@ export const PlayerProfileView: React.FC = () => {
   const [globalRank, setGlobalRank] = useState<number | null>(null);
   const [aiRecommendation, setAiRecommendation] = useState<string>('');
   const [isLoadingRec, setIsLoadingRec] = useState(false);
+  const [submissionStats, setSubmissionStats] = useState<{ total: number; passed: number }>({ total: 0, passed: 0 });
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const token = localStorage.getItem('coderealm_token');
+        if (!token) return;
+        
+        const resp = await fetch(`${API_BASE}/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!resp.ok) return;
+        
+        const userData = await resp.json();
+        if (userData.submissions && Array.isArray(userData.submissions)) {
+          const passedCount = userData.submissions.filter((s: any) => s.status === 'passed').length;
+          setSubmissionStats({
+            total: userData.submissions.length,
+            passed: passedCount
+          });
+        }
+      } catch (err) {
+        console.error('Failed to fetch user auth profile stats:', err);
+      }
+    };
+
+    fetchUserData();
+  }, []);
 
   useEffect(() => {
     const fetchRank = async () => {
@@ -65,8 +93,15 @@ export const PlayerProfileView: React.FC = () => {
         <img src={profile.avatar} alt={profile.username} style={{ width: '88px', height: '88px', borderRadius: '50%', border: '2px solid var(--border-bright)', objectFit: 'cover' }} />
         <div style={{ flex: 1, minWidth: '200px' }}>
           <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 'var(--space-1)' }}>{profile.seasonBadge}</div>
-          <h1 style={{ fontSize: '24px', color: 'var(--text-main)', fontFamily: 'var(--font-display)', fontWeight: 700 }}>{profile.username}</h1>
-          <div style={{ color: 'var(--text-muted)', fontWeight: 500, fontSize: '14px' }}>{profile.title} · {profile.guildName}</div>
+          <h1 style={{ fontSize: '24px', color: 'var(--text-main)', fontFamily: 'var(--font-display)', fontWeight: 700 }}>
+            {profile.fullName || profile.username}
+          </h1>
+          <div style={{ color: 'var(--text-muted)', fontWeight: 500, fontSize: '14px' }}>
+            @{profile.username} {profile.email && `· ${profile.email}`}
+          </div>
+          <div style={{ color: 'var(--text-dim)', fontSize: '13px', marginTop: '2px' }}>
+            {profile.title} · {profile.guildName}
+          </div>
         </div>
         <div style={{ textAlign: 'right', minWidth: '150px' }}>
           <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-md)', fontSize: '14px', fontWeight: 600, color: 'var(--text-main)', marginBottom: 'var(--space-2)' }}>
@@ -113,6 +148,8 @@ export const PlayerProfileView: React.FC = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
             {[
               { label: 'Nodes Completed', value: `${profile.completedNodeIds?.length || 0}` },
+              { label: 'Passed Submissions', value: `${submissionStats.passed}` },
+              { label: 'Total Code Attempts', value: `${submissionStats.total}` },
               { label: 'Total XP', value: `${profile.xp.toLocaleString()}` },
               { label: 'Coins', value: `${profile.coins.toLocaleString()}` },
               { label: 'Current Streak', value: `${profile.streak} days` },

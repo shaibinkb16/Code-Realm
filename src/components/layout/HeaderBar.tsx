@@ -30,6 +30,8 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({ onOpenAssessment, onToggle
         return { title: 'Class Board', subtitle: 'Homework assignment board & tutoring exams' };
       case 'profile':
         return { title: 'Report Card', subtitle: 'Your fundamental programming skill breakdown' };
+      case 'admin':
+        return { title: 'Admin Console', subtitle: 'System metrics, user management & moderation' };
       default:
         return { title: 'Code Realm', subtitle: 'Adaptive Matrix' };
     }

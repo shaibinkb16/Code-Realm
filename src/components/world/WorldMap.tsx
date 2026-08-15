@@ -118,14 +118,16 @@ export const WorldMap: React.FC = () => {
     }}>
       {/* Realm Selection Filter Bar */}
       <div style={{
-        padding: '16px 24px',
+        padding: '12px var(--space-4)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '12px',
         borderBottom: '1px solid var(--border-dark)',
         background: 'var(--bg-surface)'
       }}>
-        <div style={{ display: 'flex', gap: '12px', overflowX: 'auto' }}>
+        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', flex: 1, paddingBottom: '4px', scrollbarWidth: 'none' }}>
           {realmsData.map((realm) => {
             const isSelected = realm.id === selectedRealmId;
             const completedCount = realm.nodes.filter(n => profile.completedNodeIds.includes(n.id)).length;
@@ -138,10 +140,10 @@ export const WorldMap: React.FC = () => {
                   border: '1px solid',
                   borderColor: isSelected ? 'var(--border-bright)' : 'var(--border-dark)',
                   borderRadius: '8px',
-                  padding: '10px 18px',
+                  padding: '8px 14px',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '10px',
+                  gap: '8px',
                   color: isSelected ? 'var(--text-main)' : 'var(--text-muted)',
                   cursor: 'pointer',
                   opacity: realm.unlocked ? 1 : 0.5,
@@ -149,9 +151,9 @@ export const WorldMap: React.FC = () => {
                   whiteSpace: 'nowrap'
                 }}
               >
-                <span style={{ fontSize: '20px' }}>{realm.icon}</span>
+                <span style={{ fontSize: '18px' }}>{realm.icon}</span>
                 <div style={{ textAlign: 'left' }}>
-                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '13px' }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '12px' }}>
                     {realm.name}
                   </div>
                   <div style={{ fontSize: '10px', color: 'var(--text-dim)', fontWeight: 600 }}>
@@ -167,7 +169,7 @@ export const WorldMap: React.FC = () => {
         <button
           onClick={toggleSound}
           className="btn-secondary"
-          style={{ padding: '8px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}
+          style={{ padding: '6px 12px', fontSize: '12px', whiteSpace: 'nowrap' }}
         >
           {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
           <span>{soundEnabled ? 'SOUND: ON' : 'SOUND: OFF'}</span>
@@ -177,7 +179,7 @@ export const WorldMap: React.FC = () => {
       {/* Main Gamified RPG Map Canvas */}
       <div style={{
         flex: 1,
-        margin: 'var(--space-6)',
+        margin: 'clamp(8px, 2vw, 24px)',
         background: 'var(--bg-card)',
         border: '1px solid var(--border-subtle)',
         borderRadius: 'var(--radius-lg)',
@@ -188,14 +190,14 @@ export const WorldMap: React.FC = () => {
         {/* Realm Header Info Badge */}
         <div style={{
           position: 'sticky',
-          top: 'var(--space-6)',
-          left: 'var(--space-6)',
+          top: '12px',
+          left: '12px',
           zIndex: 10,
           background: 'var(--bg-surface)',
           border: '1px solid var(--border-bright)',
-          padding: 'var(--space-4) var(--space-5)',
+          padding: '12px 16px',
           borderRadius: 'var(--radius-md)',
-          maxWidth: '380px'
+          maxWidth: 'min(360px, calc(100% - 24px))'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
             <span style={{ fontSize: '24px' }}>{activeRealm.icon}</span>

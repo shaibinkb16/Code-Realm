@@ -7,9 +7,14 @@ from app.models.gamification import RatingHistory, Achievement, UserAchievement
 from app.models.intelligence import MistakeLog
 from app.models.contest import Contest, ContestParticipant, ContestSubmission
 
+from app.models.auth_models import UserSession, Passkey, AuthEvent
+
 __all__ = [
     "User",
     "UserProfile",
+    "UserSession",
+    "Passkey",
+    "AuthEvent",
     "Language",
     "Topic",
     "UserLanguageMastery",

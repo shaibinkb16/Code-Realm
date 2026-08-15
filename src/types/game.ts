@@ -1,4 +1,4 @@
-export type ActiveTab = 'world' | 'challenge' | 'boss' | 'duel' | 'leaderboards' | 'championship' | 'hq' | 'career' | 'profile';
+export type ActiveTab = 'world' | 'challenge' | 'boss' | 'duel' | 'leaderboards' | 'championship' | 'hq' | 'career' | 'profile' | 'admin';
 
 export type ChallengeType = 
   | 'puzzle' 
@@ -118,6 +118,8 @@ export interface SkillRating {
 
 export interface PlayerProfile {
   username: string;
+  fullName?: string;
+  email?: string;
   title: string;
   avatar: string;
   level: number;

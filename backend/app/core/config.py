@@ -66,6 +66,7 @@ class Settings(BaseSettings):
     # AI Model Integrations & Fallbacks
     AI_API_KEY: str = Field(default="", env="AI_API_KEY")
     GROQ_API_KEY: str = Field(default="", env="GROQ_API_KEY")
+    GEMINI_MODEL: str = Field(default="gemini-3.6-flash", env="GEMINI_MODEL")
 
 
 
@@ -99,7 +100,7 @@ class Settings(BaseSettings):
 
     class Config:
         case_sensitive = True
-        env_file = "../.env"
+        env_file = [".env", "backend/.env", "../.env"]
 
 settings = Settings()
 

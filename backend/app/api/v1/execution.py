@@ -113,6 +113,20 @@ async def submit_code_solution(
                 )
                 db.add(mistake)
             
+        # Save Code Submission to Database
+        if req.challenge_id:
+            from app.models.submission import CodeSubmission
+            submission_record = CodeSubmission(
+                user_id=current_user.id,
+                challenge_id=req.challenge_id,
+                submitted_code=req.code,
+                language=req.language,
+                status="passed" if won else (result.status.lower() if result.status else "failed"),
+                execution_time_ms=int(result.execution_time_ms or 0),
+                stars_earned=result.stars_earned if won else 0
+            )
+            db.add(submission_record)
+
         # Update Rating and League
         current_user.profile.rank_rating = new_rating
         current_user.profile.rank = game_service.get_league_from_rating(new_rating)

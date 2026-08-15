@@ -27,7 +27,16 @@ async def get_current_user(
     except Exception:
         raise AuthenticationError("Could not validate credentials.")
 
-    res = await db.execute(select(User).options(selectinload(User.profile), selectinload(User.language_mastery), selectinload(User.topic_mastery)).where(User.id == user_id))
+    res = await db.execute(
+        select(User)
+        .options(
+            selectinload(User.profile),
+            selectinload(User.language_mastery),
+            selectinload(User.topic_mastery),
+            selectinload(User.submissions)
+        )
+        .where(User.id == user_id)
+    )
     user = res.scalars().first()
     if not user:
         raise AuthenticationError("User not found.")

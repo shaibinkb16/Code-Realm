@@ -9,6 +9,7 @@ class RedisManager:
     def __init__(self):
         self.redis_client: redis.Redis | None = None
         self.arq_pool = None
+        self._memory_store: dict[str, str] = {}
 
     async def connect(self):
         try:
@@ -53,13 +54,15 @@ class RedisManager:
 
     async def get(self, key: str) -> str | None:
         if not self.redis_client:
-            return None
+            return self._memory_store.get(key)
         try:
-            return await self.redis_client.get(key)
+            val = await self.redis_client.get(key)
+            return val if val is not None else self._memory_store.get(key)
         except Exception:
-            return None
+            return self._memory_store.get(key)
 
     async def set(self, key: str, value: str, ttl: int = 3600):
+        self._memory_store[key] = value
         if not self.redis_client:
             return
         try:
@@ -68,6 +71,7 @@ class RedisManager:
             pass
 
     async def delete(self, key: str):
+        self._memory_store.pop(key, None)
         if not self.redis_client:
             return
         try:

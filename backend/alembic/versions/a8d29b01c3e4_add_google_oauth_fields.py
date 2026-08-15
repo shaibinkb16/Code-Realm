@@ -31,13 +31,6 @@ def upgrade() -> None:
         op.add_column('users', sa.Column('google_id', sa.String(length=255), nullable=True))
         op.create_index(op.f('ix_users_google_id'), 'users', ['google_id'], unique=True, if_not_exists=True)
 
-    if 'github_id' not in existing_cols:
-        op.add_column('users', sa.Column('github_id', sa.String(length=255), nullable=True))
-        op.create_index(op.f('ix_users_github_id'), 'users', ['github_id'], unique=True, if_not_exists=True)
-
-    if 'github_username' not in existing_cols:
-        op.add_column('users', sa.Column('github_username', sa.String(length=255), nullable=True))
-
     if 'auth_provider' not in existing_cols:
         op.add_column('users', sa.Column('auth_provider', sa.String(length=50), nullable=False, server_default='local'))
 
@@ -50,11 +43,6 @@ def downgrade() -> None:
 
     if 'auth_provider' in existing_cols:
         op.drop_column('users', 'auth_provider')
-    if 'github_username' in existing_cols:
-        op.drop_column('users', 'github_username')
-    if 'github_id' in existing_cols:
-        op.drop_index(op.f('ix_users_github_id'), table_name='users', if_exists=True)
-        op.drop_column('users', 'github_id')
     if 'google_id' in existing_cols:
         op.drop_index(op.f('ix_users_google_id'), table_name='users', if_exists=True)
         op.drop_column('users', 'google_id')

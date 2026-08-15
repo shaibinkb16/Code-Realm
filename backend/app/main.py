@@ -53,10 +53,15 @@ app.add_middleware(
 app.add_exception_handler(CodeRealmException, global_exception_handler)
 app.add_exception_handler(Exception, global_exception_handler)
 
+from app.api.v1.nodes import router as nodes_router
+from app.api.v1.admin import router as admin_router
+
 # Include Routers
 app.include_router(health_router, tags=["Health"])
 app.include_router(auth_router, prefix=f"{settings.API_V1_STR}/auth", tags=["Auth"])
 app.include_router(auth_router, prefix="/api/auth", tags=["Google OAuth Root"])
+app.include_router(nodes_router, prefix=f"{settings.API_V1_STR}/nodes", tags=["Nodes & Workstation"])
+app.include_router(admin_router, prefix=f"{settings.API_V1_STR}/admin", tags=["Admin & Moderation Console"])
 app.include_router(execution_router, prefix=f"{settings.API_V1_STR}/execute", tags=["Code Execution"])
 app.include_router(ai_router, prefix=f"{settings.API_V1_STR}/ai/mentor", tags=["AI Mentor"])
 app.include_router(challenges_router, prefix=f"{settings.API_V1_STR}/challenges", tags=["Challenges"])

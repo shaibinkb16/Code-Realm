@@ -30,9 +30,13 @@ const buildProfileFromUser = (user: any, existingSavedProfile?: Partial<PlayerPr
   const p = user?.profile || {};
   const s = user?.skills || {};
   const username = user?.username || 'Explorer';
+  const fullName = user?.full_name || user?.name || username;
+  const email = user?.email || '';
 
   return {
     username: username,
+    fullName: fullName,
+    email: email,
     title: p.title || existingSavedProfile?.title || 'Code Realm Explorer ⚔️',
     avatar: p.avatar || existingSavedProfile?.avatar || '/avatars/aethercoder.svg',
     level: existingSavedProfile?.level ?? p.level ?? 1,

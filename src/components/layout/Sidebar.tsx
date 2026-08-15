@@ -16,7 +16,8 @@ import {
   Award,
   ChevronRight,
   Flame,
-  LogOut
+  LogOut,
+  ShieldAlert
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -27,7 +28,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ onOpenAiModal, isOpen, onClose }) => {
   const { profile, activeTab, setActiveTab } = useGame();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
 
   const navGroups = [
     {
@@ -53,7 +54,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenAiModal, isOpen, onClose
         { id: 'career' as ActiveTab, label: 'Class Board', icon: Zap },
         { id: 'profile' as ActiveTab, label: 'Report Card', icon: User }
       ]
-    }
+    },
+    ...((user?.role === 'admin' || user?.role === 'super_admin') ? [
+      {
+        title: 'Management',
+        items: [
+          { id: 'admin' as ActiveTab, label: 'Admin Console', icon: ShieldAlert, badge: 'ADM' }
+        ]
+      }
+    ] : [])
   ];
 
   const handleNavClick = (id: ActiveTab) => {
@@ -123,7 +132,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenAiModal, isOpen, onClose
           />
           <div style={{ overflow: 'hidden' }}>
             <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-main)', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {profile.username}
+              {profile.fullName || profile.username}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}>
               <span>Lvl {profile.level}</span>

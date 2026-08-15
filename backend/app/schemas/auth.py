@@ -64,14 +64,30 @@ class TopicMasteryResponse(BaseModel):
     class Config:
         from_attributes = True
 
+from datetime import datetime
+
+class SubmissionResponse(BaseModel):
+    id: UUID
+    challenge_id: str
+    language: str
+    status: str
+    stars_earned: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
 class UserResponse(BaseModel):
     id: UUID
     email: EmailStr
     username: str
+    full_name: Optional[str] = None
+    auth_provider: Optional[str] = "local"
     role: str
     profile: Optional[UserProfileResponse] = None
     language_mastery: List[LanguageMasteryResponse] = Field(default_factory=list)
     topic_mastery: List[TopicMasteryResponse] = Field(default_factory=list)
+    submissions: List[SubmissionResponse] = Field(default_factory=list)
 
     class Config:
         from_attributes = True

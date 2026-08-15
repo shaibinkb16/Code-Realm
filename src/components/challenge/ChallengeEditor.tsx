@@ -80,6 +80,8 @@ export const ChallengeEditor: React.FC = () => {
   const [feedbackText, setFeedbackText] = useState('');
   const [isLoadingFeedback, setIsLoadingFeedback] = useState(false);
 
+  const [isSwapping, setIsSwapping] = useState(false);
+
   const generateChallenge = async (lang: string) => {
     setIsLoadingChallenge(true);
     setLoadError(null);
@@ -94,6 +96,7 @@ export const ChallengeEditor: React.FC = () => {
     const nodeType = activeNode?.type || 'challenge';
 
     try {
+      const token = localStorage.getItem('coderealm_token');
       const params = new URLSearchParams({
         node_id: nodeId,
         node_title: nodeTitle,
@@ -103,19 +106,52 @@ export const ChallengeEditor: React.FC = () => {
         target_language: lang
       });
 
-      const resp = await fetch(`${API_BASE}/challenges/generate?${params}`);
+      const resp = await fetch(`${API_BASE}/challenges/generate?${params}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
       if (!resp.ok) throw new Error(`Server error ${resp.status}`);
 
       const data = await resp.json();
       const aiChallenge: AIChallenge = data.challenge;
 
       setChallenge(aiChallenge);
-      setCode(aiChallenge.initialCode);
+      setCode(data.savedCode || aiChallenge.initialCode);
       setSelectedLanguage(aiChallenge.language?.toLowerCase() || lang);
     } catch (err) {
       setLoadError('Could not connect to the AI backend.');
     } finally {
       setIsLoadingChallenge(false);
+    }
+  };
+
+  const handleSwapChallenge = async () => {
+    if (!challenge || isSwapping) return;
+    setIsSwapping(true);
+    try {
+      const token = localStorage.getItem('coderealm_token');
+      const nodeId = activeNode?.id || 'node-loop-1';
+      const resp = await fetch(`${API_BASE}/challenges/swap`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          node_id: nodeId,
+          target_language: selectedLanguage
+        })
+      });
+      if (!resp.ok) throw new Error('Swap request failed');
+      const data = await resp.json();
+      setChallenge(data.challenge);
+      setCode(data.savedCode || data.challenge.initialCode);
+      setTestResults([]);
+      setHasPassedAll(false);
+      setOutput(`🔄 Swapped! ${data.message || ''}`);
+    } catch (err) {
+      setOutput('❌ Could not swap to alternate challenge.');
+    } finally {
+      setIsSwapping(false);
     }
   };
 
@@ -174,6 +210,32 @@ export const ChallengeEditor: React.FC = () => {
     if (!hasPassedAll) {
       fetchAIFeedback();
       return;
+    }
+
+    try {
+      const token = localStorage.getItem('coderealm_token');
+      if (token) {
+        await fetch(`${API_BASE}/execute/submit`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            challenge_id: activeNode?.id || challenge.title.toLowerCase().replace(/\s+/g, '-'),
+            code,
+            language: selectedLanguage,
+            test_cases: challenge.testCases.map(tc => ({
+              id: tc.id,
+              description: tc.description,
+              input: tc.input ?? (tc as any).input_data ?? '',
+              expected_output: tc.expectedOutput ?? (tc as any).expected_output ?? '',
+            })),
+          })
+        });
+      }
+    } catch (e) {
+      console.warn('Backend submission persistence error:', e);
     }
 
     confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
@@ -399,6 +461,10 @@ export const ChallengeEditor: React.FC = () => {
             </select>
           </div>
           <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+            <button onClick={handleSwapChallenge} disabled={isSwapping || isExecuting} className="btn-secondary" title="Try an alternate question for this node">
+              {isSwapping ? <Loader size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <RotateCcw size={14} />}
+              <span className="hide-mobile">Swap Question</span>
+            </button>
             <button onClick={() => setCode(challenge.initialCode)} className="btn-secondary">
               <RotateCcw size={14} /> <span className="hide-mobile">Reset</span>
             </button>

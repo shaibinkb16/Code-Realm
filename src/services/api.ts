@@ -171,6 +171,99 @@ class ApiClient {
     if (!res.ok) throw new Error('Session expired');
     return await res.json();
   }
+
+  // --- Resource-Oriented Node & Challenge Methods ---
+
+  async getNodeChallenge(nodeId: string, params: Record<string, string> = {}) {
+    const query = new URLSearchParams(params).toString();
+    const url = `${API_BASE_URL}/nodes/${nodeId}/challenge?${query}`;
+    const res = await this.fetchWithAuth(url, { method: 'GET' });
+    if (!res.ok) throw new Error(`Node challenge request failed: ${res.status}`);
+    return await res.json();
+  }
+
+  async saveChallengeDraft(nodeId: string, code: string) {
+    const url = `${API_BASE_URL}/nodes/${nodeId}/challenge/draft`;
+    const res = await this.fetchWithAuth(url, {
+      method: 'PATCH',
+      body: JSON.stringify({ code })
+    });
+    if (!res.ok) throw new Error(`Draft save failed: ${res.status}`);
+    return await res.json();
+  }
+
+  async swapNodeChallenge(nodeId: string, targetLanguage: string = 'python') {
+    const url = `${API_BASE_URL}/nodes/${nodeId}/challenge/swap?target_language=${targetLanguage}`;
+    const res = await this.fetchWithAuth(url, { method: 'POST' });
+    if (!res.ok) throw new Error(`Challenge swap failed: ${res.status}`);
+    return await res.json();
+  }
+
+  // --- Passkey & Session Management Methods ---
+
+  async getPasskeyRegisterOptions() {
+    const res = await this.fetchWithAuth(`${API_BASE_URL}/auth/passkeys/register/options`, { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to obtain passkey registration options');
+    return await res.json();
+  }
+
+  async verifyPasskeyRegistration(payload: any) {
+    const res = await this.fetchWithAuth(`${API_BASE_URL}/auth/passkeys/register/verify`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('Passkey verification failed');
+    return await res.json();
+  }
+
+  async getPasskeyLoginOptions() {
+    const res = await fetch(`${API_BASE_URL}/auth/passkeys/login/options`, { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to obtain passkey login options');
+    return await res.json();
+  }
+
+  async verifyPasskeyLogin(payload: any) {
+    const res = await fetch(`${API_BASE_URL}/auth/passkeys/login/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('Passkey authentication failed');
+    return await res.json();
+  }
+
+  async getSessions() {
+    const res = await this.fetchWithAuth(`${API_BASE_URL}/auth/sessions`, { method: 'GET' });
+    if (!res.ok) throw new Error('Failed to list sessions');
+    return await res.json();
+  }
+
+  async revokeSession(sessionId: string) {
+    const res = await this.fetchWithAuth(`${API_BASE_URL}/auth/sessions/${sessionId}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to revoke session');
+    return await res.json();
+  }
+
+  async getPasskeys() {
+    const res = await this.fetchWithAuth(`${API_BASE_URL}/auth/passkeys`, { method: 'GET' });
+    if (!res.ok) throw new Error('Failed to list passkeys');
+    return await res.json();
+  }
+
+  async deletePasskey(passkeyId: string) {
+    const res = await this.fetchWithAuth(`${API_BASE_URL}/auth/passkeys/${passkeyId}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to delete passkey');
+    return await res.json();
+  }
+
+  async saveOnboarding(data: any) {
+    const res = await this.fetchWithAuth(`${API_BASE_URL}/auth/onboarding`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) throw new Error('Failed to save onboarding preferences');
+    return await res.json();
+  }
 }
 
 export const api = new ApiClient();

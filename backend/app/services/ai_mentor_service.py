@@ -145,8 +145,133 @@ class AIMentorService:
             )
 
     # ─────────────────────────────────────────────
-    # 2. DYNAMIC CHALLENGE GENERATION
+    # 2. DYNAMIC CHALLENGE GENERATION & BATCHING
     # ─────────────────────────────────────────────
+    @staticmethod
+    async def generate_challenge_batch(
+        node_title: str,
+        realm_name: str,
+        node_type: str,
+        skill_rating: int,
+        target_language: str = "python"
+    ) -> dict:
+        """
+        Calls Gemini 3.6 Flash to batch-generate 3 distinct coding challenges
+        (1 Primary Challenge + 2 Alternate Challenges) for the node to store in PostgreSQL.
+        """
+        difficulty = "Easy" if skill_rating < 600 else ("Medium" if skill_rating < 1200 else "Hard")
+        if node_type.lower() == "boss":
+            difficulty = "Boss"
+
+        system_prompt = (
+            "You are an AI curriculum designer for CODE REALM, an RPG coding game. "
+            f"Generate a batch of 3 distinct, varied {target_language.capitalize()} coding challenges as a valid JSON array of 3 objects. "
+            "The first challenge is the Primary Challenge, the next two are Alternate Challenges. "
+            "Each challenge must be unique, educational, and solvable. "
+            "Return ONLY valid JSON, no markdown fences."
+        )
+
+        user_prompt = f"""
+Generate 3 distinct {target_language.capitalize()} coding challenges (1 Primary + 2 Alternates) for:
+- Map Node: "{node_title}"
+- Realm: "{realm_name}"
+- Node Type: "{node_type}"
+- Player Skill Rating: {skill_rating}/2500 → Difficulty: {difficulty}
+
+Return a JSON array containing exactly 3 objects matching this schema:
+[
+  {{
+    "title": "Short dramatic challenge title (Primary)",
+    "type": "puzzle",
+    "difficulty": "{difficulty}",
+    "description": "Clear task description",
+    "storyContext": "1-2 sentence immersive RPG flavor text",
+    "initialCode": "Starter {target_language.capitalize()} code scaffold with comments",
+    "language": "{target_language.lower()}",
+    "testCases": [
+      {{ "id": "t1", "input": "5", "expectedOutput": "15", "description": "verifies sum of 5" }},
+      {{ "id": "t2", "input": "10", "expectedOutput": "55", "description": "verifies sum of 10" }}
+    ],
+    "hints": ["hint 1", "hint 2"],
+    "explanation": "Concept explanation shown after solving",
+    "xpReward": 150,
+    "coinReward": 75
+  }}
+]
+"""
+        fallback_stubs = {
+            "python": "def solve(n):\n    # Your code here\n    pass\n\nprint(solve(5))",
+            "javascript": "function solve(n) {\n    // Your code here\n}\n\nconsole.log(solve(5));"
+        }
+        fallback_stub = fallback_stubs.get(target_language.lower(), fallback_stubs["python"])
+
+        try:
+            raw = await AIMentorService._call_gemini(system_prompt, user_prompt, json_mode=True)
+            batch = json.loads(raw)
+            if isinstance(batch, dict) and "challenges" in batch:
+                batch = batch["challenges"]
+            if not isinstance(batch, list) or len(batch) == 0:
+                raise ValueError("Expected non-empty JSON list of challenges")
+            return {"status": "SUCCESS", "challenges": batch}
+        except Exception as e:
+            logger.error(f"Challenge batch generation error: {e}")
+            return {
+                "status": "FALLBACK",
+                "challenges": [
+                    {
+                        "title": f"The Primary Trial of {node_title}",
+                        "type": "puzzle",
+                        "difficulty": difficulty,
+                        "description": f"Write a {target_language.capitalize()} function `solve(n)` that returns the sum of integers from 1 to n.",
+                        "storyContext": f"The ancient oracle of {realm_name} tests your basic logic.",
+                        "initialCode": fallback_stub,
+                        "language": target_language.lower(),
+                        "testCases": [
+                            {"id": "t1", "input": "5", "expectedOutput": "15", "description": "solve(5) returns 15"},
+                            {"id": "t2", "input": "10", "expectedOutput": "55", "description": "solve(10) returns 55"}
+                        ],
+                        "hints": ["Use a loop or n*(n+1)//2"],
+                        "explanation": "Summation logic.",
+                        "xpReward": 100,
+                        "coinReward": 50,
+                    },
+                    {
+                        "title": f"Alternate Challenge: Evens of {node_title}",
+                        "type": "puzzle",
+                        "difficulty": difficulty,
+                        "description": f"Write a {target_language.capitalize()} function `solve(n)` that returns the sum of all EVEN numbers from 1 to n.",
+                        "storyContext": f"A mysterious cipher in {realm_name} requires even parity.",
+                        "initialCode": fallback_stub,
+                        "language": target_language.lower(),
+                        "testCases": [
+                            {"id": "t1", "input": "6", "expectedOutput": "12", "description": "solve(6) = 2+4+6 = 12"},
+                            {"id": "t2", "input": "10", "expectedOutput": "30", "description": "solve(10) = 2+4+6+8+10 = 30"}
+                        ],
+                        "hints": ["Use i % 2 == 0 inside loop"],
+                        "explanation": "Parity filtering.",
+                        "xpReward": 120,
+                        "coinReward": 60,
+                    },
+                    {
+                        "title": f"Alternate Challenge: Multiples of {node_title}",
+                        "type": "puzzle",
+                        "difficulty": difficulty,
+                        "description": f"Write a {target_language.capitalize()} function `solve(n)` that returns the product of numbers 1 through n.",
+                        "storyContext": f"The factorial vault of {realm_name} awaits.",
+                        "initialCode": fallback_stub,
+                        "language": target_language.lower(),
+                        "testCases": [
+                            {"id": "t1", "input": "4", "expectedOutput": "24", "description": "factorial(4) = 24"},
+                            {"id": "t2", "input": "5", "expectedOutput": "120", "description": "factorial(5) = 120"}
+                        ],
+                        "hints": ["Start product at 1 and multiply"],
+                        "explanation": "Factorial multiplication logic.",
+                        "xpReward": 140,
+                        "coinReward": 70,
+                    }
+                ]
+            }
+
     @staticmethod
     async def generate_challenge(
         node_title: str,
