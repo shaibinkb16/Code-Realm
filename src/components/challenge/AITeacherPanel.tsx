@@ -49,9 +49,113 @@ export const AITeacherPanel: React.FC<Props> = ({ challengeId, userCode }) => {
     }
   };
 
+  const parseInlineFormatting = (text: string) => {
+    const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+    return parts.map((part, idx) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={idx} style={{ color: 'var(--accent-gold)', fontWeight: 700 }}>{part.slice(2, -2)}</strong>;
+      }
+      if (part.startsWith('`') && part.endsWith('`')) {
+        return (
+          <code key={idx} style={{
+            background: 'var(--bg-elevated)',
+            color: 'var(--accent-teal-bright)',
+            padding: '2px 6px',
+            borderRadius: '4px',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '12px',
+            border: '1px solid var(--border-subtle)'
+          }}>
+            {part.slice(1, -1)}
+          </code>
+        );
+      }
+      return part;
+    });
+  };
+
+  const renderFormattedContent = (content: string) => {
+    if (!content) return null;
+    const blocks = content.split(/\n\n+/);
+
+    return blocks.map((block, bIdx) => {
+      const trimmed = block.trim();
+
+      if (trimmed.startsWith('# ') || trimmed.startsWith('## ') || trimmed.startsWith('### ')) {
+        const headingText = trimmed.replace(/^#+\s*/, '');
+        return (
+          <h4 key={bIdx} style={{
+            fontSize: '14px',
+            fontWeight: 800,
+            color: 'var(--accent-teal-bright)',
+            marginTop: bIdx === 0 ? '0' : '14px',
+            marginBottom: '8px',
+            paddingBottom: '4px',
+            borderBottom: '1px solid rgba(255,255,255,0.1)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}>
+            <Sparkles size={14} style={{ color: 'var(--accent-gold)' }} />
+            {headingText}
+          </h4>
+        );
+      }
+
+      if (/^\*\*[^*]+\*\*$/.test(trimmed) || /^\*\*[^*]+:\s*[^*]+\*\*$/.test(trimmed)) {
+        const headingText = trimmed.replace(/^\*\*|\*\*$/g, '');
+        return (
+          <h4 key={bIdx} style={{
+            fontSize: '13px',
+            fontWeight: 800,
+            color: 'var(--accent-gold)',
+            marginTop: bIdx === 0 ? '0' : '14px',
+            marginBottom: '8px',
+            paddingBottom: '4px',
+            borderBottom: '1px solid rgba(217, 160, 54, 0.25)',
+            letterSpacing: '0.4px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}>
+            <BookOpen size={13} />
+            {headingText}
+          </h4>
+        );
+      }
+
+      const lines = trimmed.split('\n');
+
+      return (
+        <div key={bIdx} style={{ marginBottom: bIdx === blocks.length - 1 ? 0 : '10px' }}>
+          {lines.map((line, lIdx) => {
+            const lTrim = line.trim();
+
+            if (lTrim.startsWith('- ') || lTrim.startsWith('* ')) {
+              return (
+                <div key={lIdx} style={{ display: 'flex', gap: '8px', marginLeft: '4px', marginBottom: '4px' }}>
+                  <span style={{ color: 'var(--accent-gold)', fontWeight: 800 }}>•</span>
+                  <span>{parseInlineFormatting(lTrim.substring(2))}</span>
+                </div>
+              );
+            }
+
+            return (
+              <p key={lIdx} style={{ margin: '0 0 4px 0', lineHeight: 1.6 }}>
+                {parseInlineFormatting(line)}
+              </p>
+            );
+          })}
+        </div>
+      );
+    });
+  };
+
   return (
     <div style={{
-      width: '320px',
+      width: '100%',
+      minWidth: 0,
+      maxWidth: '100%',
       background: 'var(--bg-surface)',
       borderLeft: '1px solid var(--border-subtle)',
       display: 'flex',
@@ -191,7 +295,7 @@ export const AITeacherPanel: React.FC<Props> = ({ challengeId, userCode }) => {
             whiteSpace: 'pre-wrap',
             fontFamily: activeTab === 'example' ? 'var(--font-mono)' : 'var(--font-body)'
           }}>
-            {aiResponse}
+            {renderFormattedContent(aiResponse)}
           </div>
         )}
       </div>

@@ -45,7 +45,7 @@ export const EmailLoginForm: React.FC<EmailLoginFormProps> = ({ mode, onSubmit, 
             autoComplete="username"
             value={formData.username}
             onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-            placeholder={mode === 'login' ? 'you@coderealm.dev' : 'Choose explorer name'}
+            placeholder={mode === 'login' ? 'Enter username or email' : 'Choose explorer name'}
             className="cr-input"
           />
         </div>
@@ -63,7 +63,7 @@ export const EmailLoginForm: React.FC<EmailLoginFormProps> = ({ mode, onSubmit, 
               autoComplete="email"
               value={formData.email}
               onChange={(e) => handleEmailChange(e.target.value)}
-              placeholder="you@coderealm.dev"
+              placeholder="name@example.com"
               className="cr-input"
               style={emailError ? { borderColor: '#ef4444' } : {}}
             />

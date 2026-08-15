@@ -20,22 +20,25 @@ export const Leaderboards: React.FC = () => {
         if (!resp.ok) throw new Error('Server error');
         const data: any[] = await resp.json();
 
-        const entries: LeaderboardEntry[] = data.map((p, i) => ({
-          rank: i + 1,
-          username: p.username,
-          avatar: p.avatar || `/avatars/${['cipherlord', 'syntaxqueen', 'byteninja', 'aethercoder', 'pythoneerx'][i % 5]}.svg`,
-          rating: p.rating,
-          xp: p.xp,
-          wins: p.wins || 0,
-          streak: p.streak || 0,
-          league: p.league || 'Unranked',
-          isCurrentUser: p.username === profile.username,
-        }));
+        const entries: LeaderboardEntry[] = data.map((p, i) => {
+          const isUser = p.username === profile.username || (p.full_name && (p.full_name === profile.fullName || p.full_name === profile.username));
+          return {
+            rank: i + 1,
+            username: p.full_name || p.username,
+            avatar: p.avatar || `/avatars/${['cipherlord', 'syntaxqueen', 'byteninja', 'aethercoder', 'pythoneerx'][i % 5]}.svg`,
+            rating: p.rating,
+            xp: p.xp,
+            wins: p.wins || 0,
+            streak: p.streak || 0,
+            league: p.league || 'Unranked',
+            isCurrentUser: isUser,
+          };
+        });
 
         if (entries.length === 0) {
           setLeaderboardData([{
             rank: 1,
-            username: `${profile.username} (You)`,
+            username: profile.fullName || profile.username || 'Explorer',
             avatar: profile.avatar || '/avatars/aethercoder.svg',
             rating: profile.rankRating,
             xp: profile.xp,
@@ -45,11 +48,11 @@ export const Leaderboards: React.FC = () => {
             isCurrentUser: true,
           }]);
         } else {
-          const hasCurrentUser = entries.some(e => e.username === profile.username);
+          const hasCurrentUser = entries.some(e => e.isCurrentUser);
           if (!hasCurrentUser) {
             entries.push({
               rank: entries.length + 1,
-              username: `${profile.username} (You)`,
+              username: profile.fullName || profile.username || 'Explorer',
               avatar: profile.avatar || '/avatars/aethercoder.svg',
               rating: profile.rankRating,
               xp: profile.xp,
@@ -64,7 +67,7 @@ export const Leaderboards: React.FC = () => {
       } catch (err) {
         setLeaderboardData([{
           rank: 1,
-          username: `${profile.username} (You)`,
+          username: profile.fullName || profile.username || 'Explorer',
           avatar: profile.avatar || '/avatars/aethercoder.svg',
           rating: profile.rankRating,
           xp: profile.xp,

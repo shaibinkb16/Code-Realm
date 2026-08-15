@@ -14,6 +14,7 @@ router = APIRouter()
 class LeaderboardUserDTO(BaseModel):
     rank: int
     username: str
+    full_name: Optional[str] = None
     avatar: str
     rating: int
     xp: int
@@ -59,7 +60,8 @@ async def get_global_leaderboard(
         entries.append(
             LeaderboardUserDTO(
                 rank=idx,
-                username=user.username,
+                username=user.full_name or user.username,
+                full_name=user.full_name,
                 avatar=profile.avatar,
                 rating=profile.rank_rating,
                 xp=profile.xp,

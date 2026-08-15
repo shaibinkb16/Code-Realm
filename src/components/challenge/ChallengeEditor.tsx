@@ -495,7 +495,7 @@ export const ChallengeEditor: React.FC = () => {
           />
         </div>
 
-        <div style={{ height: '200px', borderTop: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', background: 'var(--bg-elevated)' }}>
+        <div style={{ height: '200px', minHeight: '200px', maxHeight: '200px', flexShrink: 0, borderTop: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', background: 'var(--bg-elevated)' }}>
           <div style={{ padding: 'var(--space-2) var(--space-4)', borderBottom: '1px solid var(--border-subtle)', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span>Console</span>
             {testResults.length > 0 && <span style={{ color: hasPassedAll ? 'var(--success)' : 'var(--error)' }}>{testResults.filter(r => r.passed).length}/{testResults.length} Passed</span>}
