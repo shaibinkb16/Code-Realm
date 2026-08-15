@@ -67,6 +67,14 @@ class RedisManager:
         except Exception:
             pass
 
+    async def delete(self, key: str):
+        if not self.redis_client:
+            return
+        try:
+            await self.redis_client.delete(key)
+        except Exception:
+            pass
+
     async def check_rate_limit(self, identifier: str, limit: int = 100, window_sec: int = 60) -> bool:
         """Returns True if within rate limit, False if exceeded."""
         if not self.redis_client:
@@ -81,3 +89,4 @@ class RedisManager:
             return True
 
 redis_manager = RedisManager()
+

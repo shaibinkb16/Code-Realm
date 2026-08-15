@@ -65,7 +65,12 @@ class RateLimiter:
         self.window_seconds = window_seconds
 
     async def __call__(self, request: Request):
-        client_ip = request.client.host if request.client else "unknown"
+        x_forwarded_for = request.headers.get("x-forwarded-for")
+        if x_forwarded_for:
+            client_ip = x_forwarded_for.split(",")[0].strip()
+        else:
+            client_ip = request.client.host if request.client else "unknown"
+            
         path = request.url.path
         identifier = f"{path}:{client_ip}"
         
@@ -75,5 +80,6 @@ class RateLimiter:
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Too many requests. Please try again later."
             )
+
 
 

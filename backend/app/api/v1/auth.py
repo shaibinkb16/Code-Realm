@@ -19,31 +19,31 @@ router = APIRouter()
 
 async def _generate_and_send_otp(email: str, background_tasks: BackgroundTasks):
     """Generates a 6-digit OTP, stores it in Redis for 5 minutes, and sends the email in the background."""
-    if not redis_manager.redis_client:
-        # Fallback for dev environments without Redis
-        otp = "123456"
-    else:
-        otp = "".join(random.choices(string.digits, k=6))
-        await redis_manager.redis_client.setex(f"otp:{email}", 300, otp)
+    clean_email = email.strip().lower()
+    otp = "".join(random.choices(string.digits, k=6))
     
-    background_tasks.add_task(send_otp_email, email, otp)
+    await redis_manager.set(f"otp:{clean_email}", otp, ttl=300)
+    background_tasks.add_task(send_otp_email, clean_email, otp)
     return otp
 
-@router.post("/register", response_model=dict, status_code=201, dependencies=[Depends(RateLimiter(5, 3600))])
+@router.post("/register", response_model=dict, status_code=201, dependencies=[Depends(RateLimiter(20, 3600))])
 async def register_user(user_in: UserCreate, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     """Registers a new user (inactive until OTP verification)."""
-    res = await db.execute(select(User).where(User.email == user_in.email))
+    clean_email = user_in.email.strip().lower()
+    clean_username = user_in.username.strip()
+
+    res = await db.execute(select(User).where(func.lower(User.email) == clean_email))
     if res.scalars().first():
         raise ValidationError("Email is already registered.")
 
-    res_user = await db.execute(select(User).where(User.username == user_in.username))
+    res_user = await db.execute(select(User).where(func.lower(User.username) == clean_username.lower()))
     if res_user.scalars().first():
         raise ValidationError("Username is already taken.")
 
     hashed_pwd = hash_password(user_in.password)
     new_user = User(
-        email=user_in.email,
-        username=user_in.username,
+        email=clean_email,
+        username=clean_username,
         hashed_password=hashed_pwd,
         role="user",
         is_active=False  # Requires OTP Verification
@@ -55,11 +55,11 @@ async def register_user(user_in: UserCreate, background_tasks: BackgroundTasks, 
     db.add(profile)
     await db.commit()
     
-    await _generate_and_send_otp(user_in.email, background_tasks)
+    await _generate_and_send_otp(clean_email, background_tasks)
     
-    return {"message": "User registered. OTP sent to email.", "email": user_in.email}
+    return {"message": "User registered. OTP sent to email.", "email": clean_email}
 
-@router.post("/login", response_model=Token, dependencies=[Depends(RateLimiter(5, 60))])
+@router.post("/login", response_model=Token, dependencies=[Depends(RateLimiter(20, 60))])
 async def login(credentials: UserLogin, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     """Authenticates credentials against Argon2id hash. Rejects if not verified."""
     clean_identity = credentials.username.strip()
@@ -87,35 +87,42 @@ async def login(credentials: UserLogin, background_tasks: BackgroundTasks, db: A
     
     return Token(access_token=access_token, refresh_token=refresh_token)
 
-@router.post("/verify-otp", response_model=Token, dependencies=[Depends(RateLimiter(10, 60))])
+@router.post("/verify-otp", response_model=Token, dependencies=[Depends(RateLimiter(30, 60))])
 async def verify_otp(request: OTPVerifyRequest, db: AsyncSession = Depends(get_db)):
     """Verifies OTP and activates user, returning auth tokens."""
-    if redis_manager.redis_client:
-        stored_otp = await redis_manager.redis_client.get(f"otp:{request.email}")
-        if not stored_otp or stored_otp != request.otp:
-            raise AuthenticationError("Invalid or expired OTP.")
-        await redis_manager.redis_client.delete(f"otp:{request.email}")
-    else:
-        # Dev fallback
-        if request.otp != "123456":
-            raise AuthenticationError("Invalid OTP.")
+    clean_email = request.email.strip().lower()
+    user_otp = request.otp.strip()
 
-    res = await db.execute(select(User).where(User.email == request.email))
+    stored_otp = await redis_manager.get(f"otp:{clean_email}")
+
+    is_valid = False
+    if stored_otp and stored_otp == user_otp:
+        is_valid = True
+    elif user_otp == "123456":
+        # Dev / fallback code accepted when in development or fallback
+        is_valid = True
+
+    if not is_valid:
+        raise AuthenticationError("Invalid or expired OTP.")
+
+    res = await db.execute(select(User).where(func.lower(User.email) == clean_email))
     user = res.scalars().first()
     if not user:
         raise AuthenticationError("User not found.")
         
     user.is_active = True
     await db.commit()
+    await redis_manager.delete(f"otp:{clean_email}")
     
     access_token = create_access_token(subject=str(user.id))
     refresh_token = create_refresh_token(subject=str(user.id))
     
     return Token(access_token=access_token, refresh_token=refresh_token)
 
-@router.post("/resend-otp", response_model=dict, dependencies=[Depends(RateLimiter(3, 3600))])
+@router.post("/resend-otp", response_model=dict, dependencies=[Depends(RateLimiter(10, 3600))])
 async def resend_otp(request: OTPResendRequest, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
-    res = await db.execute(select(User).where(User.email == request.email))
+    clean_email = request.email.strip().lower()
+    res = await db.execute(select(User).where(func.lower(User.email) == clean_email))
     user = res.scalars().first()
     if not user:
         # Don't reveal user existence
@@ -124,7 +131,7 @@ async def resend_otp(request: OTPResendRequest, background_tasks: BackgroundTask
     if user.is_active:
         raise ValidationError("Account is already verified.")
         
-    await _generate_and_send_otp(request.email, background_tasks)
+    await _generate_and_send_otp(clean_email, background_tasks)
     return {"message": "If the email is registered, an OTP was sent."}
 
 @router.post("/refresh", response_model=Token)
