@@ -1,3 +1,4 @@
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.redis import redis_manager
 from app.core.logging import logger
 from app.repositories.challenge_repository import ChallengeRepository
