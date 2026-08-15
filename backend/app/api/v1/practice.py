@@ -88,14 +88,28 @@ async def recommend_practice(
                 }
             }
         
-        # If no challenge found in DB, fallback to AI generation
-        return await ai_mentor_service.generate_challenge(
-            node_title="Practice Node",
+        # If no challenge found in DB, fallback to AI generation & persist in DB QuestionBank
+        from app.services.question_bank_service import QuestionBankService
+        qset = await QuestionBankService(db).get_or_create_question_set(
+            node_id=f"practice-{target_diff.lower()}",
+            node_title=f"Adaptive Practice ({target_diff})",
             realm_name="Training Grounds",
             node_type="challenge",
             skill_rating=target_elo,
             target_language=language
         )
+        c = qset.challenges[0]
+        return {
+            "status": "SUCCESS",
+            "challenge": {
+                "id": c.id,
+                "title": c.title,
+                "description": c.description,
+                "initialCode": c.initial_code,
+                "difficulty": c.difficulty,
+                "testCases": [{"id": str(t.id), "input": t.input_data, "expectedOutput": t.expected_output, "description": t.description} for t in c.test_cases] if c.test_cases else []
+            }
+        }
 
 @router.post("/diagnostic")
 async def diagnostic_assessment(
