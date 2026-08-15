@@ -40,22 +40,25 @@ async def general_ai_mentor_chat(
 @router.post("/guidance")
 async def chat_with_ai_mentor(
     req: AIMentorGuidanceRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Contextual AI Tutor chat endpoint with prompt injection safety and mode options."""
     
     # Fetch recent mistakes for this user
-    res = await db.execute(
-        select(MistakeLog)
-        .where(MistakeLog.user_id == current_user.id)
-        .order_by(MistakeLog.created_at.desc())
-        .limit(3)
-    )
-    mistakes = res.scalars().all()
-    recent_errors = [f"{m.error_type}: {m.error_message}" for m in mistakes]
-    
-    skill = current_user.profile.rank_rating if current_user.profile else 1000
+    recent_errors = []
+    skill = 1000
+    if current_user:
+        res = await db.execute(
+            select(MistakeLog)
+            .where(MistakeLog.user_id == current_user.id)
+            .order_by(MistakeLog.created_at.desc())
+            .limit(3)
+        )
+        mistakes = res.scalars().all()
+        recent_errors = [f"{m.error_type}: {m.error_message}" for m in mistakes]
+        if current_user.profile:
+            skill = current_user.profile.rank_rating or 1000
 
     response = await ai_mentor_service.generate_mentor_guidance(
         user_code=req.user_code,

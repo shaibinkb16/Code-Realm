@@ -27,7 +27,9 @@ export const AITeacherPanel: React.FC<Props> = ({ challengeId, userCode }) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}` // Ensure we pass token if needed
+          ...(localStorage.getItem('coderealm_token') || localStorage.getItem('token')
+            ? { 'Authorization': `Bearer ${localStorage.getItem('coderealm_token') || localStorage.getItem('token')}` }
+            : {})
         },
         body: JSON.stringify({
           challenge_id: challengeId,
