@@ -37,7 +37,23 @@ async def get_global_leaderboard(
         except Exception:
             pass
             
-    query = select(User, UserProfile).join(UserProfile, User.id == UserProfile.user_id)
+    query = (
+        select(User, UserProfile)
+        .join(UserProfile, User.id == UserProfile.user_id)
+        .where(
+            User.role.notin_(["admin", "super_admin"]) &
+            ~User.username.ilike("admin%") &
+            ~User.email.ilike("%admin%") &
+            ~User.email.ilike("%@test.com") &
+            ~User.email.ilike("%@coderealm.test") &
+            ~User.username.ilike("usera_%") &
+            ~User.username.ilike("userb_%") &
+            ~User.username.ilike("user_a_%") &
+            ~User.username.ilike("user_b_%") &
+            ~User.username.ilike("std_%") &
+            ~User.username.ilike("explorer_%")
+        )
+    )
     
     if language_id:
         query = query.join(UserLanguageMastery, User.id == UserLanguageMastery.user_id)
