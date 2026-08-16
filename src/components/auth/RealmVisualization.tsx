@@ -36,9 +36,7 @@ export const RealmVisualization: React.FC = () => {
 
       {/* Header Badge */}
       <div className="relative z-10 flex items-center space-x-3">
-        <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 font-mono font-bold text-lg shadow-sm">
-          ⚔️
-        </div>
+        <img src="/logo.jpg" alt="CODE REALM" className="w-9 h-9 rounded-xl object-cover border border-indigo-500/30 shadow-sm" />
         <div>
           <span className="text-xs font-mono font-semibold tracking-widest text-indigo-400/80 uppercase">World Entrance</span>
           <h1 className="text-lg font-bold text-white tracking-tight">CODE REALM</h1>

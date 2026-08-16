@@ -22,11 +22,18 @@ from app.api.v1.memory import router as memory_router
 from app.api.v1.practice import router as practice_router
 from app.api.v1.contests import router as contests_router
 
+from app.core.database import init_db
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifecycle manager for startup and graceful SIGTERM shutdown."""
     logger.info("Initializing CODE REALM FastAPI Backend Application...")
     await redis_manager.connect()
+    try:
+        await init_db()
+        logger.info("PostgreSQL database tables verified & synchronized.")
+    except Exception as e:
+        logger.warn(f"Database initialization warning: {e}")
     yield
     logger.info("Performing graceful shutdown sequence (SIGTERM)...")
     await redis_manager.close()
@@ -55,11 +62,13 @@ app.add_exception_handler(Exception, global_exception_handler)
 
 from app.api.v1.nodes import router as nodes_router
 from app.api.v1.admin import router as admin_router
+from app.api.v1.user import router as user_router
 
 # Include Routers
 app.include_router(health_router, tags=["Health"])
 app.include_router(auth_router, prefix=f"{settings.API_V1_STR}/auth", tags=["Auth"])
 app.include_router(auth_router, prefix="/api/auth", tags=["Google OAuth Root"])
+app.include_router(user_router, prefix=f"{settings.API_V1_STR}/user", tags=["User Profile & HQ"])
 app.include_router(nodes_router, prefix=f"{settings.API_V1_STR}/nodes", tags=["Nodes & Workstation"])
 app.include_router(admin_router, prefix=f"{settings.API_V1_STR}/admin", tags=["Admin & Moderation Console"])
 app.include_router(execution_router, prefix=f"{settings.API_V1_STR}/execute", tags=["Code Execution"])

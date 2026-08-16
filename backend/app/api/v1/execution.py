@@ -127,9 +127,20 @@ async def submit_code_solution(
             )
             db.add(submission_record)
 
-        # Update Rating and League
-        current_user.profile.rank_rating = new_rating
-        current_user.profile.rank = game_service.get_league_from_rating(new_rating)
+        # Update Rating, League, and User Profile Stats
+        if current_user.profile:
+            current_user.profile.rank_rating = new_rating
+            current_user.profile.rank = game_service.get_league_from_rating(new_rating)
+            if won:
+                xp_earned = getattr(result, 'xp_earned', 100) or 100
+                coins_earned = getattr(result, 'coins_earned', 50) or 50
+                stars_earned = getattr(result, 'stars_earned', 3) or 3
+
+                current_user.profile.xp += xp_earned
+                current_user.profile.coins += coins_earned
+                current_user.profile.stars += stars_earned
+                current_user.profile.level = (current_user.profile.xp // 1000) + 1
+                current_user.profile.next_level_xp = current_user.profile.level * 1000
         
         # Save History
         history = RatingHistory(

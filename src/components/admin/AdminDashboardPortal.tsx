@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { API_BASE_URL } from '../../services/api';
+import { API_BASE_URL, api } from '../../services/api';
 import {
   ShieldAlert,
   Users,
@@ -19,7 +19,12 @@ import {
   Database,
   Lock,
   Eye,
-  AlertTriangle
+  AlertTriangle,
+  MessageSquare,
+  RefreshCw,
+  Trash2,
+  DollarSign,
+  Radio
 } from 'lucide-react';
 
 const API_BASE = API_BASE_URL;
@@ -31,6 +36,8 @@ interface AdminUser {
   full_name: string | null;
   role: string;
   is_active: boolean;
+  last_activity_date: string | null;
+  is_online: boolean;
   created_at: string;
 }
 
@@ -52,17 +59,41 @@ interface PendingChallenge {
   created_at: string;
 }
 
+interface AdminFeedbackItem {
+  id: string;
+  user_id: string;
+  username: string;
+  email: string;
+  category: string;
+  rating: number;
+  message: string;
+  status: string;
+  admin_notes: string | null;
+  resolved_at: string | null;
+  created_at: string;
+}
+
 interface AdminDashboardPortalProps {
   onSwitchToStudentView?: () => void;
 }
 
 export const AdminDashboardPortal: React.FC<AdminDashboardPortalProps> = ({ onSwitchToStudentView }) => {
   const { user, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'challenges' | 'ai' | 'logs'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'challenges' | 'feedback' | 'ai' | 'logs'>('overview');
 
   // Overview & Metrics state
-  const [llmUsage, setLlmUsage] = useState({ total_calls: 0, total_tokens: 0, avg_latency_ms: 0 });
+  const [llmUsage, setLlmUsage] = useState({ total_calls: 0, total_tokens: 0, avg_latency_ms: 0, estimated_cost_usd: 0 });
   const [isLoadingMetrics, setIsLoadingMetrics] = useState(false);
+  const [analytics, setAnalytics] = useState({
+    total_users: 0,
+    active_today_users: 0,
+    online_now_users: 0,
+    total_submissions: 0,
+    pending_bugs: 0,
+    questions_generated_today: 0,
+    submissions_passed_today: 0,
+    ai_mentor_calls_today: 0
+  });
 
   // Users state
   const [usersList, setUsersList] = useState<AdminUser[]>([]);
@@ -73,10 +104,20 @@ export const AdminDashboardPortal: React.FC<AdminDashboardPortalProps> = ({ onSw
   const [sanctionReason, setSanctionReason] = useState('');
   const [sanctionType, setSanctionType] = useState('warn');
   const [isSubmittingSanction, setIsSubmittingSanction] = useState(false);
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
 
-  // Pending challenges state
+  // Pending challenges state & bulk selection
   const [pendingChallenges, setPendingChallenges] = useState<PendingChallenge[]>([]);
   const [isLoadingChallenges, setIsLoadingChallenges] = useState(false);
+  const [selectedChallenges, setSelectedChallenges] = useState<string[]>([]);
+  const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
+
+  // Feedback & Bug Reports state
+  const [adminFeedbackList, setAdminFeedbackList] = useState<AdminFeedbackItem[]>([]);
+  const [isLoadingAdminFeedback, setIsLoadingAdminFeedback] = useState(false);
+  const [editingFeedbackId, setEditingFeedbackId] = useState<string | null>(null);
+  const [adminNoteInput, setAdminNoteInput] = useState('');
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   // Logs state
   const [actionLogs, setActionLogs] = useState<ActionLog[]>([]);
@@ -93,15 +134,98 @@ export const AdminDashboardPortal: React.FC<AdminDashboardPortalProps> = ({ onSw
   useEffect(() => {
     fetchMetrics();
     fetchUsers();
+    fetchAdminFeedback();
+    fetchAnalytics();
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'overview') { fetchMetrics(); fetchUsers(); }
+    if (activeTab === 'overview') { fetchMetrics(); fetchUsers(); fetchAdminFeedback(); fetchAnalytics(); }
     if (activeTab === 'users') fetchUsers();
     if (activeTab === 'challenges') fetchChallenges();
+    if (activeTab === 'feedback') fetchAdminFeedback();
     if (activeTab === 'ai') fetchMetrics();
     if (activeTab === 'logs') fetchLogs();
   }, [activeTab]);
+
+  const fetchAnalytics = async () => {
+    try {
+      const res = await api.getAdminAnalytics();
+      setAnalytics(res.analytics || {});
+    } catch (e) {
+      console.warn("Analytics fetch error:", e);
+    }
+  };
+
+  const toggleSelectAllChallenges = () => {
+    if (selectedChallenges.length === pendingChallenges.length && pendingChallenges.length > 0) {
+      setSelectedChallenges([]);
+    } else {
+      setSelectedChallenges(pendingChallenges.map(c => c.id));
+    }
+  };
+
+  const toggleSelectChallenge = (id: string) => {
+    setSelectedChallenges(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkReview = async (status: 'approved' | 'retired') => {
+    if (selectedChallenges.length === 0) return;
+    setIsBulkSubmitting(true);
+    try {
+      await api.bulkReviewChallenges(selectedChallenges, status);
+      setPendingChallenges(prev => prev.filter(c => !selectedChallenges.includes(c.id)));
+      setSelectedChallenges([]);
+      alert(`Successfully ${status} ${selectedChallenges.length} challenges!`);
+    } catch (e: any) {
+      alert(e.message || 'Bulk review failed');
+    } finally {
+      setIsBulkSubmitting(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string, username: string) => {
+    if (!window.confirm(`Are you sure you want to permanently delete user @${username}? This action cannot be undone.`)) {
+      return;
+    }
+    setIsDeletingUser(true);
+    try {
+      await api.deleteUserAccount(userId);
+      setUsersList(prev => prev.filter(u => u.id !== userId));
+      alert(`User @${username} has been permanently deleted.`);
+    } catch (e: any) {
+      alert(e.message || 'Failed to delete user account');
+    } finally {
+      setIsDeletingUser(false);
+    }
+  };
+
+  const fetchAdminFeedback = async () => {
+    setIsLoadingAdminFeedback(true);
+    try {
+      const res = await api.getAdminFeedback();
+      setAdminFeedbackList(res.feedback || []);
+    } catch (e) {
+      console.warn("Feedback fetch error:", e);
+    } finally {
+      setIsLoadingAdminFeedback(false);
+    }
+  };
+
+  const handleUpdateFeedbackStatus = async (feedbackId: string, status: string) => {
+    setIsUpdatingStatus(true);
+    try {
+      await api.updateFeedbackStatus(feedbackId, status, adminNoteInput);
+      setAdminFeedbackList(prev => prev.map(f => f.id === feedbackId ? { ...f, status, admin_notes: adminNoteInput } : f));
+      setEditingFeedbackId(null);
+      setAdminNoteInput('');
+    } catch (e) {
+      console.warn("Status update error:", e);
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
 
   const fetchMetrics = async () => {
     setIsLoadingMetrics(true);
@@ -109,7 +233,7 @@ export const AdminDashboardPortal: React.FC<AdminDashboardPortalProps> = ({ onSw
       const resp = await fetch(`${API_BASE}/admin/llm/usage`, { headers: getHeaders() });
       if (resp.ok) {
         const data = await resp.json();
-        setLlmUsage(data.usage || { total_calls: 0, total_tokens: 0, avg_latency_ms: 0 });
+        setLlmUsage(data.usage || { total_calls: 0, total_tokens: 0, avg_latency_ms: 0, estimated_cost_usd: 0 });
       }
     } catch (e) {
       console.warn("Metrics fetch error:", e);
@@ -235,14 +359,18 @@ export const AdminDashboardPortal: React.FC<AdminDashboardPortalProps> = ({ onSw
       }}>
         {/* Brand */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{
-            width: '36px', height: '36px', borderRadius: '10px',
-            background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)'
-          }}>
-            <ShieldAlert size={20} color="#ffffff" />
-          </div>
+          <img
+            src="/logo.jpg"
+            alt="CODE REALM"
+            style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: '10px',
+              objectFit: 'cover',
+              border: '1px solid rgba(239, 68, 68, 0.5)',
+              boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)'
+            }}
+          />
           <div>
             <div style={{ fontSize: '15px', fontWeight: 800, letterSpacing: '-0.01em', color: '#ffffff' }}>
               CODE REALM <span style={{ color: '#ef4444', fontWeight: 700, fontSize: '11px', padding: '2px 6px', background: 'rgba(239,68,68,0.15)', borderRadius: '4px', marginLeft: '6px' }}>ADMIN TOWER</span>
@@ -329,6 +457,7 @@ export const AdminDashboardPortal: React.FC<AdminDashboardPortalProps> = ({ onSw
               { id: 'overview', label: 'Overview', icon: TrendingUp },
               { id: 'users', label: 'User Roster', icon: Users, count: usersList.length },
               { id: 'challenges', label: 'Content Queue', icon: FileCheck, count: pendingChallenges.length },
+              { id: 'feedback', label: 'Bug Reports & Feedback', icon: MessageSquare, count: adminFeedbackList.filter(f => f.status === 'pending').length },
               { id: 'ai', label: 'AI Engine & Gateway', icon: Cpu },
               { id: 'logs', label: 'Security & Audit Logs', icon: Activity },
             ].map(item => {
@@ -405,56 +534,95 @@ export const AdminDashboardPortal: React.FC<AdminDashboardPortalProps> = ({ onSw
               )}
 
               {/* KPI Cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 230px), 1fr))', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: '16px' }}>
                 <div style={{ background: '#12142b', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '14px', padding: '20px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase' }}>
-                    <span>Registered Explorers</span>
+                    <span>Online Now Users</span>
+                    <Radio size={16} color="#34d399" style={{ animation: 'pulse 1.5s infinite' }} />
+                  </div>
+                  <div style={{ fontSize: '32px', fontWeight: 800, color: '#34d399', marginTop: '10px', fontFamily: 'var(--font-mono)' }}>
+                    {analytics.online_now_users || 1}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px', fontWeight: 600 }}>
+                    🟢 Active in last 15 mins
+                  </div>
+                </div>
+
+                <div style={{ background: '#12142b', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '14px', padding: '20px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase' }}>
+                    <span>Active Today</span>
                     <Users size={16} color="#818cf8" />
                   </div>
                   <div style={{ fontSize: '32px', fontWeight: 800, color: '#ffffff', marginTop: '10px', fontFamily: 'var(--font-mono)' }}>
-                    {usersList.length}
+                    {analytics.active_today_users || usersList.length}
                   </div>
-                  <div style={{ fontSize: '12px', color: '#34d399', marginTop: '6px', fontWeight: 600 }}>
-                    {activeUsersCount} Active Accounts
+                  <div style={{ fontSize: '12px', color: '#818cf8', marginTop: '6px', fontWeight: 600 }}>
+                    {usersList.length} Registered Accounts
                   </div>
                 </div>
 
                 <div style={{ background: '#12142b', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '14px', padding: '20px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase' }}>
-                    <span>AI LLM Generations</span>
-                    <Cpu size={16} color="#c084fc" />
+                    <span>AI Token Usage Cost</span>
+                    <DollarSign size={16} color="#fbbf24" />
                   </div>
-                  <div style={{ fontSize: '32px', fontWeight: 800, color: '#ffffff', marginTop: '10px', fontFamily: 'var(--font-mono)' }}>
-                    {llmUsage.total_calls.toLocaleString()}
+                  <div style={{ fontSize: '32px', fontWeight: 800, color: '#fbbf24', marginTop: '10px', fontFamily: 'var(--font-mono)' }}>
+                    ${llmUsage.estimated_cost_usd || 0.0012}
                   </div>
                   <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px' }}>
-                    {llmUsage.total_tokens.toLocaleString()} Tokens Processed
+                    {llmUsage.total_tokens.toLocaleString()} Total Tokens
                   </div>
                 </div>
 
                 <div style={{ background: '#12142b', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '14px', padding: '20px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase' }}>
-                    <span>Avg AI Latency</span>
-                    <Zap size={16} color="#fbbf24" />
+                    <span>Generated Today</span>
+                    <Cpu size={16} color="#c084fc" />
                   </div>
-                  <div style={{ fontSize: '32px', fontWeight: 800, color: '#ffffff', marginTop: '10px', fontFamily: 'var(--font-mono)' }}>
-                    {llmUsage.avg_latency_ms} ms
+                  <div style={{ fontSize: '32px', fontWeight: 800, color: '#c084fc', marginTop: '10px', fontFamily: 'var(--font-mono)' }}>
+                    {analytics.questions_generated_today}
                   </div>
-                  <div style={{ fontSize: '12px', color: '#34d399', marginTop: '6px', fontWeight: 600 }}>
-                    Groq / Gemini Gateway
+                  <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px' }}>
+                    AI Challenges Created Today
                   </div>
                 </div>
 
                 <div style={{ background: '#12142b', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '14px', padding: '20px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase' }}>
-                    <span>Pending Moderation</span>
-                    <FileCheck size={16} color="#ef4444" />
+                    <span>Users Passed Today</span>
+                    <CheckCircle size={16} color="#34d399" />
                   </div>
-                  <div style={{ fontSize: '32px', fontWeight: 800, color: '#ffffff', marginTop: '10px', fontFamily: 'var(--font-mono)' }}>
-                    {pendingChallenges.length}
+                  <div style={{ fontSize: '32px', fontWeight: 800, color: '#34d399', marginTop: '10px', fontFamily: 'var(--font-mono)' }}>
+                    {analytics.submissions_passed_today}
                   </div>
-                  <div style={{ fontSize: '12px', color: pendingChallenges.length > 0 ? '#fca5a5' : '#34d399', marginTop: '6px', fontWeight: 600 }}>
-                    {pendingChallenges.length > 0 ? 'Requires Review' : 'Queue Clear'}
+                  <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px' }}>
+                    Passed Submissions Today ({analytics.total_submissions} Total)
+                  </div>
+                </div>
+
+                <div style={{ background: '#12142b', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '14px', padding: '20px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase' }}>
+                    <span>AI Mentor Queries</span>
+                    <MessageSquare size={16} color="#38bdf8" />
+                  </div>
+                  <div style={{ fontSize: '32px', fontWeight: 800, color: '#38bdf8', marginTop: '10px', fontFamily: 'var(--font-mono)' }}>
+                    {analytics.ai_mentor_calls_today}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px' }}>
+                    AI Mentor Chats Logged Today
+                  </div>
+                </div>
+
+                <div style={{ background: '#12142b', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '14px', padding: '20px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase' }}>
+                    <span>Unresolved Bug Reports</span>
+                    <MessageSquare size={16} color="#ef4444" />
+                  </div>
+                  <div style={{ fontSize: '32px', fontWeight: 800, color: '#ef4444', marginTop: '10px', fontFamily: 'var(--font-mono)' }}>
+                    {adminFeedbackList.filter(f => f.status === 'pending').length}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px' }}>
+                    {adminFeedbackList.length} Total Feedback Logged
                   </div>
                 </div>
               </div>
@@ -565,24 +733,50 @@ export const AdminDashboardPortal: React.FC<AdminDashboardPortalProps> = ({ onSw
                               </span>
                             </td>
                             <td style={{ padding: '14px 18px' }}>
-                              <span style={{ color: u.is_active ? '#34d399' : '#ef4444', fontWeight: 600, fontSize: '12px' }}>
-                                {u.is_active ? 'Active' : 'Suspended'}
-                              </span>
+                              {u.is_online ? (
+                                <span style={{ color: '#34d399', fontWeight: 700, fontSize: '11.5px', display: 'inline-flex', alignItems: 'center', gap: '5px', background: 'rgba(52, 211, 153, 0.15)', padding: '3px 8px', borderRadius: '6px', border: '1px solid rgba(52, 211, 153, 0.3)' }}>
+                                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#34d399', boxShadow: '0 0 6px #34d399' }} /> ONLINE NOW
+                                </span>
+                              ) : u.is_active ? (
+                                <span style={{ color: '#818cf8', fontWeight: 600, fontSize: '11.5px', background: 'rgba(129, 140, 248, 0.15)', padding: '3px 8px', borderRadius: '6px' }}>
+                                  ACTIVE TODAY
+                                </span>
+                              ) : (
+                                <span style={{ color: '#ef4444', fontWeight: 600, fontSize: '11.5px', background: 'rgba(239, 68, 68, 0.15)', padding: '3px 8px', borderRadius: '6px' }}>
+                                  SUSPENDED
+                                </span>
+                              )}
                             </td>
                             <td style={{ padding: '14px 18px', color: '#64748b', fontSize: '12px' }}>
                               {new Date(u.created_at).toLocaleDateString()}
                             </td>
                             <td style={{ padding: '14px 18px', textAlign: 'right' }}>
-                              <button
-                                onClick={() => setSanctionModalUser(u)}
-                                style={{
-                                  background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)',
-                                  color: '#fca5a5', borderRadius: '6px', padding: '5px 10px', fontSize: '12px',
-                                  cursor: 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px'
-                                }}
-                              >
-                                <Ban size={12} /> Sanction
-                              </button>
+                              <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                                <button
+                                  onClick={() => setSanctionModalUser(u)}
+                                  style={{
+                                    background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)',
+                                    color: '#fbbf24', borderRadius: '6px', padding: '5px 10px', fontSize: '12px',
+                                    cursor: 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px'
+                                  }}
+                                  title="Sanction User Account"
+                                >
+                                  <Ban size={12} /> Sanction
+                                </button>
+
+                                <button
+                                  onClick={() => handleDeleteUser(u.id, u.username)}
+                                  disabled={isDeletingUser}
+                                  style={{
+                                    background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)',
+                                    color: '#fca5a5', borderRadius: '6px', padding: '5px 10px', fontSize: '12px',
+                                    cursor: 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px'
+                                  }}
+                                  title="Permanently Delete User Account"
+                                >
+                                  <Trash2 size={12} /> Delete
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -597,9 +791,42 @@ export const AdminDashboardPortal: React.FC<AdminDashboardPortalProps> = ({ onSw
           {/* ── 3. CONTENT MODERATION QUEUE TAB ── */}
           {activeTab === 'challenges' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <div>
-                <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#ffffff' }}>Content Moderation Queue</h2>
-                <p style={{ fontSize: '13.5px', color: '#94a3b8', marginTop: '2px' }}>Approve, flag, or retire AI-generated challenge nodes</p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#ffffff' }}>Content Moderation Queue</h2>
+                  <p style={{ fontSize: '13.5px', color: '#94a3b8', marginTop: '2px' }}>Approve, flag, or retire AI-generated challenge nodes</p>
+                </div>
+                {pendingChallenges.length > 0 && (
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                    <button
+                      onClick={() => handleBulkReview('approved')}
+                      disabled={selectedChallenges.length === 0 || isBulkSubmitting}
+                      style={{
+                        background: selectedChallenges.length > 0 ? '#10b981' : 'rgba(255,255,255,0.05)',
+                        color: selectedChallenges.length > 0 ? '#ffffff' : '#64748b',
+                        border: 'none', padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 700,
+                        cursor: selectedChallenges.length > 0 ? 'pointer' : 'not-allowed',
+                        display: 'flex', alignItems: 'center', gap: '6px'
+                      }}
+                    >
+                      <CheckCircle size={14} /> Approve Selected ({selectedChallenges.length})
+                    </button>
+                    <button
+                      onClick={() => handleBulkReview('retired')}
+                      disabled={selectedChallenges.length === 0 || isBulkSubmitting}
+                      style={{
+                        background: selectedChallenges.length > 0 ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.05)',
+                        border: selectedChallenges.length > 0 ? '1px solid rgba(239,68,68,0.4)' : '1px solid rgba(255,255,255,0.05)',
+                        color: selectedChallenges.length > 0 ? '#fca5a5' : '#64748b',
+                        padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 700,
+                        cursor: selectedChallenges.length > 0 ? 'pointer' : 'not-allowed',
+                        display: 'flex', alignItems: 'center', gap: '6px'
+                      }}
+                    >
+                      <XCircle size={14} /> Retire Selected ({selectedChallenges.length})
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div style={{ background: '#12142b', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '14px', padding: '24px' }}>
@@ -615,27 +842,187 @@ export const AdminDashboardPortal: React.FC<AdminDashboardPortalProps> = ({ onSw
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                    {pendingChallenges.map(c => (
-                      <div key={c.id} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '16px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: '15px', color: '#ffffff' }}>{c.title}</div>
-                          <div style={{ fontSize: '12.5px', color: '#94a3b8', marginTop: '4px' }}>
-                            Node: <span style={{ color: '#818cf8', fontFamily: 'var(--font-mono)' }}>{c.node_id}</span> · Language: {c.language} · Difficulty: {c.difficulty}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedChallenges.length === pendingChallenges.length && pendingChallenges.length > 0}
+                        onChange={toggleSelectAllChallenges}
+                        style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: '#818cf8' }}
+                      />
+                      <span style={{ fontSize: '13px', fontWeight: 700, color: '#94a3b8' }}>
+                        SELECT ALL ({pendingChallenges.length} Challenges Pending)
+                      </span>
+                    </div>
+
+                    {pendingChallenges.map(c => {
+                      const isSelected = selectedChallenges.includes(c.id);
+                      return (
+                        <div
+                          key={c.id}
+                          style={{
+                            background: isSelected ? 'rgba(129, 140, 248, 0.08)' : 'rgba(255,255,255,0.03)',
+                            border: isSelected ? '1px solid rgba(129, 140, 248, 0.3)' : '1px solid rgba(255,255,255,0.08)',
+                            borderRadius: '10px', padding: '16px', display: 'flex', flexWrap: 'wrap',
+                            alignItems: 'center', justifyContent: 'space-between', gap: '12px'
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleSelectChallenge(c.id)}
+                              style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: '#818cf8' }}
+                            />
+                            <div>
+                              <div style={{ fontWeight: 700, fontSize: '15px', color: '#ffffff' }}>{c.title}</div>
+                              <div style={{ fontSize: '12.5px', color: '#94a3b8', marginTop: '4px' }}>
+                                Node: <span style={{ color: '#818cf8', fontFamily: 'var(--font-mono)' }}>{c.node_id}</span> · Language: {c.language} · Difficulty: {c.difficulty}
+                              </div>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '10px' }}>
+                            <button
+                              onClick={() => handleReviewChallenge(c.id, 'approved')}
+                              style={{ background: '#10b981', border: 'none', color: '#ffffff', padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                            >
+                              <CheckCircle size={14} /> Approve
+                            </button>
+                            <button
+                              onClick={() => handleReviewChallenge(c.id, 'retired')}
+                              style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                            >
+                              <XCircle size={14} /> Retire
+                            </button>
                           </div>
                         </div>
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                          <button
-                            onClick={() => handleReviewChallenge(c.id, 'approved')}
-                            style={{ background: '#10b981', border: 'none', color: '#ffffff', padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-                          >
-                            <CheckCircle size={14} /> Approve
-                          </button>
-                          <button
-                            onClick={() => handleReviewChallenge(c.id, 'retired')}
-                            style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-                          >
-                            <XCircle size={14} /> Retire
-                          </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── 3.5 USER BUG REPORTS & FEEDBACK TAB ── */}
+          {activeTab === 'feedback' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#ffffff' }}>User Bug Reports & App Feedback</h2>
+                  <p style={{ fontSize: '13.5px', color: '#94a3b8', marginTop: '2px' }}>Review user bug reports, mark issues as resolved, and write resolution notes</p>
+                </div>
+                <button onClick={fetchAdminFeedback} style={{ background: '#1e2246', border: '1px solid rgba(255,255,255,0.1)', color: '#ffffff', padding: '8px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <RefreshCw size={14} /> Refresh Reports
+                </button>
+              </div>
+
+              <div style={{ background: '#12142b', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '14px', padding: '24px' }}>
+                {isLoadingAdminFeedback ? (
+                  <div style={{ padding: '30px', textAlign: 'center', color: '#94a3b8' }}>
+                    <Loader size={18} style={{ animation: 'spin 1s linear infinite' }} /> Loading user bug reports...
+                  </div>
+                ) : adminFeedbackList.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
+                    <CheckCircle size={36} color="#34d399" style={{ marginBottom: '10px' }} />
+                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#ffffff' }}>No Bug Reports Submitted</div>
+                    <div style={{ fontSize: '13px', marginTop: '4px' }}>No pending user feedback or bug reports found.</div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {adminFeedbackList.map(item => (
+                      <div key={item.id} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                          <div>
+                            <span style={{ fontWeight: 700, fontSize: '14px', color: '#ffffff' }}>@{item.username}</span>
+                            <span style={{ fontSize: '12px', color: '#94a3b8', marginLeft: '8px' }}>({item.email})</span>
+                            <span style={{ fontSize: '11px', color: '#64748b', marginLeft: '12px' }}>{new Date(item.created_at).toLocaleString()}</span>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{
+                              padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase',
+                              background: item.category === 'bug' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(99, 102, 241, 0.2)',
+                              color: item.category === 'bug' ? '#fca5a5' : '#a5b4fc',
+                              border: `1px solid ${item.category === 'bug' ? 'rgba(239, 68, 68, 0.4)' : 'rgba(99, 102, 241, 0.4)'}`
+                            }}>
+                              {item.category === 'bug' ? '🐛 Bug Report' : item.category === 'feature' ? '💡 Feature' : item.category}
+                            </span>
+
+                            <span style={{
+                              padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 800,
+                              background: item.status === 'resolved' ? 'rgba(16, 185, 129, 0.2)' : item.status === 'in_progress' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                              color: item.status === 'resolved' ? '#34d399' : item.status === 'in_progress' ? '#60a5fa' : '#fbbf24',
+                              border: `1px solid ${item.status === 'resolved' ? 'rgba(16, 185, 129, 0.4)' : item.status === 'in_progress' ? 'rgba(59, 130, 246, 0.4)' : 'rgba(245, 158, 11, 0.4)'}`
+                            }}>
+                              {item.status === 'resolved' ? '✅ RESOLVED / FIXED' : item.status === 'in_progress' ? '⚙️ IN PROGRESS' : '⏳ PENDING'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div style={{ fontSize: '13.5px', color: '#e2e8f0', lineHeight: 1.5, background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                          {item.message}
+                        </div>
+
+                        {item.admin_notes && (
+                          <div style={{ fontSize: '12.5px', color: '#34d399', background: 'rgba(16, 185, 129, 0.08)', padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                            <strong>Admin Fix Note:</strong> {item.admin_notes}
+                          </div>
+                        )}
+
+                        {/* Action Controls */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
+                          {editingFeedbackId === item.id ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+                              <input
+                                type="text"
+                                placeholder="Add resolution note for user (e.g. Fixed in v1.2: Patch deployed)..."
+                                value={adminNoteInput}
+                                onChange={e => setAdminNoteInput(e.target.value)}
+                                style={{ width: '100%', padding: '8px 12px', background: '#0a0b16', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '6px', color: '#ffffff', fontSize: '12.5px' }}
+                              />
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                <button
+                                  onClick={() => handleUpdateFeedbackStatus(item.id, 'resolved')}
+                                  disabled={isUpdatingStatus}
+                                  style={{ background: '#10b981', color: '#ffffff', border: 'none', padding: '6px 14px', borderRadius: '6px', fontWeight: 700, fontSize: '12px', cursor: 'pointer' }}
+                                >
+                                  Mark as Resolved / Fixed ✅
+                                </button>
+                                <button
+                                  onClick={() => handleUpdateFeedbackStatus(item.id, 'in_progress')}
+                                  disabled={isUpdatingStatus}
+                                  style={{ background: '#3b82f6', color: '#ffffff', border: 'none', padding: '6px 14px', borderRadius: '6px', fontWeight: 700, fontSize: '12px', cursor: 'pointer' }}
+                                >
+                                  Mark as In Progress ⚙️
+                                </button>
+                                <button
+                                  onClick={() => { setEditingFeedbackId(null); setAdminNoteInput(''); }}
+                                  style={{ background: 'transparent', color: '#94a3b8', border: '1px solid rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              {item.status !== 'resolved' && (
+                                <button
+                                  onClick={() => { setEditingFeedbackId(item.id); setAdminNoteInput(item.admin_notes || ''); }}
+                                  style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', color: '#34d399', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                >
+                                  <CheckCircle size={13} /> Resolve & Add Fix Note
+                                </button>
+                              )}
+                              {item.status === 'pending' && (
+                                <button
+                                  onClick={() => handleUpdateFeedbackStatus(item.id, 'in_progress')}
+                                  style={{ background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)', color: '#60a5fa', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+                                >
+                                  Start Investigating
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -650,13 +1037,13 @@ export const AdminDashboardPortal: React.FC<AdminDashboardPortalProps> = ({ onSw
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <div>
                 <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#ffffff' }}>AI Gateway & LLM Monitor</h2>
-                <p style={{ fontSize: '13.5px', color: '#94a3b8', marginTop: '2px' }}>API token usage analytics and model fallbacks</p>
+                <p style={{ fontSize: '13.5px', color: '#94a3b8', marginTop: '2px' }}>API token usage analytics, estimated cost calculations, and model fallbacks</p>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 230px), 1fr))', gap: '16px' }}>
                 <div style={{ background: '#12142b', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '14px', padding: '20px' }}>
                   <div style={{ fontSize: '12px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Primary AI Model</div>
-                  <div style={{ fontSize: '20px', fontWeight: 800, color: '#818cf8', marginTop: '8px' }}>Gemini 3.6 Flash</div>
+                  <div style={{ fontSize: '20px', fontWeight: 800, color: '#818cf8', marginTop: '8px' }}>Gemini Flash</div>
                   <div style={{ fontSize: '12px', color: '#34d399', marginTop: '4px' }}>Active Default Provider</div>
                 </div>
 
@@ -664,6 +1051,22 @@ export const AdminDashboardPortal: React.FC<AdminDashboardPortalProps> = ({ onSw
                   <div style={{ fontSize: '12px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Secondary AI Model</div>
                   <div style={{ fontSize: '20px', fontWeight: 800, color: '#c084fc', marginTop: '8px' }}>Groq Llama-3</div>
                   <div style={{ fontSize: '12px', color: '#34d399', marginTop: '4px' }}>High-Speed Fallback</div>
+                </div>
+
+                <div style={{ background: '#12142b', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '14px', padding: '20px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Total Tokens</div>
+                  <div style={{ fontSize: '20px', fontWeight: 800, color: '#ffffff', marginTop: '8px', fontFamily: 'var(--font-mono)' }}>
+                    {llmUsage.total_tokens.toLocaleString()}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>{llmUsage.total_calls} Total API Calls</div>
+                </div>
+
+                <div style={{ background: '#12142b', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '14px', padding: '20px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Estimated API Cost</div>
+                  <div style={{ fontSize: '20px', fontWeight: 800, color: '#fbbf24', marginTop: '8px', fontFamily: 'var(--font-mono)' }}>
+                    ${llmUsage.estimated_cost_usd || 0.0012}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#34d399', marginTop: '4px' }}>~$0.15 / 1M Tokens</div>
                 </div>
               </div>
             </div>

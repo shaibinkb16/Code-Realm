@@ -8,6 +8,11 @@ from app.models.intelligence import MistakeLog
 from app.models.contest import Contest, ContestParticipant, ContestSubmission
 
 from app.models.auth_models import UserSession, Passkey, AuthEvent
+from app.models.feedback import UserFeedback
+from app.models.admin import (
+    AdminRole, UserAdminRole, UserSanction, SystemSetting,
+    AdminActionLog, ChallengeReport, LLMUsageLog, RefreshToken, AuditLog
+)
 
 __all__ = [
     "User",
@@ -15,6 +20,7 @@ __all__ = [
     "UserSession",
     "Passkey",
     "AuthEvent",
+    "UserFeedback",
     "Language",
     "Topic",
     "UserLanguageMastery",

@@ -33,28 +33,30 @@ const buildProfileFromUser = (user: any, existingSavedProfile?: Partial<PlayerPr
   const fullName = user?.full_name || user?.name || username;
   const email = user?.email || '';
 
+  const rankRating = p.rank_rating ?? existingSavedProfile?.rankRating ?? 500;
+
   return {
     username: username,
     fullName: fullName,
     email: email,
     title: p.title || existingSavedProfile?.title || 'Code Realm Explorer ⚔️',
     avatar: p.avatar || existingSavedProfile?.avatar || '/avatars/aethercoder.svg',
-    level: existingSavedProfile?.level ?? p.level ?? 1,
-    xp: existingSavedProfile?.xp ?? p.xp ?? 0,
-    nextLevelXp: existingSavedProfile?.nextLevelXp ?? p.next_level_xp ?? 1000,
-    coins: existingSavedProfile?.coins ?? p.coins ?? 100,
-    stars: existingSavedProfile?.stars ?? p.stars ?? 0,
-    streak: existingSavedProfile?.streak ?? p.streak ?? 1,
-    rank: existingSavedProfile?.rank || p.rank || 'Bronze',
-    rankRating: existingSavedProfile?.rankRating ?? p.rank_rating ?? 500,
+    level: p.level ?? existingSavedProfile?.level ?? 1,
+    xp: p.xp ?? existingSavedProfile?.xp ?? 0,
+    nextLevelXp: p.next_level_xp ?? existingSavedProfile?.nextLevelXp ?? 1000,
+    coins: p.coins ?? existingSavedProfile?.coins ?? 100,
+    stars: p.stars ?? existingSavedProfile?.stars ?? 0,
+    streak: p.streak ?? existingSavedProfile?.streak ?? 1,
+    rank: p.rank || existingSavedProfile?.rank || 'Bronze',
+    rankRating: rankRating,
     skills: {
-      python: existingSavedProfile?.skills?.python ?? s.python ?? 500,
-      javascript: existingSavedProfile?.skills?.javascript ?? s.javascript ?? 500,
-      algorithms: existingSavedProfile?.skills?.algorithms ?? s.algorithms ?? 500,
-      debugging: existingSavedProfile?.skills?.debugging ?? s.debugging ?? 500,
-      databases: existingSavedProfile?.skills?.databases ?? s.databases ?? 500,
-      systemDesign: existingSavedProfile?.skills?.systemDesign ?? s.system_design ?? 500,
-      aiEngineering: existingSavedProfile?.skills?.aiEngineering ?? s.ai_engineering ?? 500,
+      python: s.python ?? existingSavedProfile?.skills?.python ?? rankRating,
+      javascript: s.javascript ?? existingSavedProfile?.skills?.javascript ?? rankRating,
+      algorithms: s.algorithms ?? existingSavedProfile?.skills?.algorithms ?? rankRating,
+      debugging: s.debugging ?? existingSavedProfile?.skills?.debugging ?? rankRating,
+      databases: s.databases ?? existingSavedProfile?.skills?.databases ?? rankRating,
+      systemDesign: s.systemDesign ?? existingSavedProfile?.skills?.systemDesign ?? rankRating,
+      aiEngineering: s.aiEngineering ?? existingSavedProfile?.skills?.aiEngineering ?? rankRating,
     },
     pet: existingSavedProfile?.pet || {
       id: `pet-${user?.id || '1'}`,

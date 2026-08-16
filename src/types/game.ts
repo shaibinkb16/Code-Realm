@@ -1,4 +1,4 @@
-export type ActiveTab = 'world' | 'challenge' | 'boss' | 'duel' | 'leaderboards' | 'championship' | 'hq' | 'career' | 'profile' | 'admin';
+export type ActiveTab = 'world' | 'challenge' | 'boss' | 'duel' | 'leaderboards' | 'championship' | 'hq' | 'admin';
 
 export type ChallengeType = 
   | 'puzzle' 

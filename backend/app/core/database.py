@@ -42,3 +42,10 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
+async def init_db():
+    """Ensures all SQLAlchemy metadata tables (including user_feedback) are created in PostgreSQL."""
+    async with engine.begin() as conn:
+        import app.models  # noqa
+        await conn.run_sync(Base.metadata.create_all)
+
+

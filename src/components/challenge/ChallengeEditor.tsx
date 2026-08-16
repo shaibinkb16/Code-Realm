@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
+import { api, API_BASE_URL } from '../../services/api';
 import { AITeacherPanel } from './AITeacherPanel';
 import Editor from '@monaco-editor/react';
 import confetti from 'canvas-confetti';
@@ -57,8 +58,6 @@ interface ExecutionResult {
   coins_earned: number;
   test_results: TestResult[];
 }
-
-import { API_BASE_URL } from '../../services/api';
 
 const API_BASE = API_BASE_URL;
 
@@ -215,7 +214,7 @@ export const ChallengeEditor: React.FC = () => {
     try {
       const token = localStorage.getItem('coderealm_token');
       if (token) {
-        await fetch(`${API_BASE}/execute/submit`, {
+        const resp = await fetch(`${API_BASE}/execute/submit`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -233,6 +232,26 @@ export const ChallengeEditor: React.FC = () => {
             })),
           })
         });
+
+        if (resp.ok) {
+          const profileData = await api.getUserProfile();
+          if (profileData && profileData.profile) {
+            const p = profileData.profile;
+            setProfile(prev => ({
+              ...prev,
+              level: p.level,
+              xp: p.xp,
+              nextLevelXp: p.next_level_xp,
+              coins: p.coins,
+              stars: p.stars,
+              streak: p.streak,
+              rank: p.rank,
+              rankRating: p.rank_rating,
+              hq: { ...prev.hq, levelName: p.hq_level },
+              pet: { ...prev.pet, stage: p.pet_stage, level: p.pet_level }
+            }));
+          }
+        }
       }
     } catch (e) {
       console.warn('Backend submission persistence error:', e);

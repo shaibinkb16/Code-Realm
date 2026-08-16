@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
 import { api } from '../../services/api';
 import { AchievementGallery } from './AchievementGallery';
+import { FormattedText } from '../ui/FormattedText';
 import type { Achievement } from '../../types/game';
 import {
   Layers, Sparkles, Flame, Award,
@@ -86,37 +87,46 @@ export const DeveloperHQ: React.FC = () => {
     return idx >= 0 && idx < HQ_TIERS.length - 1 ? HQ_TIERS[idx + 1] : null;
   }, [currentTier]);
 
-  const handleUpgradeHq = () => {
+  const handleUpgradeHq = async () => {
     if (!nextTier) { triggerNotification('Max tier reached — Tech Empire!'); return; }
     if (profile.coins < nextTier.cost) {
       triggerNotification(`Not enough coins! Need ${nextTier.cost} 🪙`); return;
     }
-    setProfile((prev: any) => ({
-      ...prev,
-      coins: prev.coins - nextTier.cost,
-      hq: {
-        ...prev.hq,
-        levelName: nextTier.name,
-        unlockedBuildings: nextTier.unlocks
-          ? [...(prev.hq?.unlockedBuildings || []), nextTier.unlocks]
-          : prev.hq?.unlockedBuildings || [],
-      }
-    }));
-    triggerNotification(`HQ Upgraded to ${nextTier.name}! Unlocked ${nextTier.unlocks}!`);
+    try {
+      const res = await api.upgradeHq();
+      setProfile((prev: any) => ({
+        ...prev,
+        coins: res.coins,
+        hq: {
+          ...prev.hq,
+          levelName: res.hq_level,
+          unlockedBuildings: res.unlocked_building
+            ? [...(prev.hq?.unlockedBuildings || []), res.unlocked_building]
+            : prev.hq?.unlockedBuildings || [],
+        }
+      }));
+      triggerNotification(res.message);
+    } catch (err: any) {
+      triggerNotification(err.message || 'HQ upgrade failed');
+    }
   };
 
-  const handleUpgradePet = () => {
+  const handleUpgradePet = async () => {
     const stages = ['Baby', 'Junior', 'Advanced', 'Master', 'Legend Dragon'];
     const currentIdx = stages.indexOf(profile.pet?.stage || 'Baby');
     if (currentIdx >= stages.length - 1) { triggerNotification('Your pet reached Legend Dragon — Max!'); return; }
     if (profile.coins < 500) { triggerNotification('Need 500 coins to evolve!'); return; }
-    const nextStage = stages[currentIdx + 1];
-    setProfile((prev: any) => ({
-      ...prev,
-      coins: prev.coins - 500,
-      pet: { ...prev.pet, stage: nextStage, level: prev.pet.level + 1 }
-    }));
-    triggerNotification(`${profile.pet?.name} evolved to ${nextStage} stage!`);
+    try {
+      const res = await api.upgradePet();
+      setProfile((prev: any) => ({
+        ...prev,
+        coins: res.coins,
+        pet: { ...prev.pet, stage: res.pet_stage, level: res.pet_level }
+      }));
+      triggerNotification(res.message);
+    } catch (err: any) {
+      triggerNotification(err.message || 'Pet evolution failed');
+    }
   };
 
   const fetchBriefing = async () => {
@@ -350,9 +360,7 @@ Give me: 1 motivational opener, 2 specific daily missions targeting my weakest s
                   <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
                 </div>
               ) : (
-                <div style={{ fontSize: '14px', color: 'var(--text-main)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                  {briefing}
-                </div>
+                <FormattedText text={briefing} style={{ fontSize: '14px' }} />
               )}
             </div>
           </div>

@@ -533,6 +533,7 @@ class OnboardingRequest(BaseModel):
     goals: List[str] = []
     preferred_language: str = "python"
     skill_level: str = "Intermediate"
+    career_goal: Optional[str] = "Full-Stack Developer"
 
 
 @router.post("/passkeys/register/options")
@@ -763,7 +764,7 @@ async def save_onboarding_preferences(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Saves user explorer profile, goals, and learning mastery target after registration."""
+    """Saves user explorer profile, goals, preferred language, and calibrates initial ELO rank rating."""
     res = await db.execute(select(UserProfile).where(UserProfile.user_id == current_user.id))
     profile = res.scalars().first()
 
@@ -776,16 +777,31 @@ async def save_onboarding_preferences(
     if req.avatar:
         profile.avatar = req.avatar
 
+    # Calibrate initial starting ELO rank_rating based on skill_level assessment
+    level_elo_map = {
+        "Child / absolute beginner": 300,
+        "Beginner": 500,
+        "Intermediate": 800,
+        "Advanced": 1200,
+        "Advanced Engineer": 1200
+    }
+    initial_elo = level_elo_map.get(req.skill_level, 500)
+    profile.rank_rating = initial_elo
+
     await db.commit()
 
     return {
         "status": "SUCCESS",
-        "message": "Onboarding complete. Your realm is ready!",
+        "message": "Adaptive onboarding complete. Your realm is ready!",
         "profile": {
             "title": profile.title,
             "avatar": profile.avatar,
             "level": profile.level,
-            "xp": profile.xp
+            "xp": profile.xp,
+            "rank_rating": profile.rank_rating,
+            "preferred_language": req.preferred_language,
+            "skill_level": req.skill_level,
+            "career_goal": req.career_goal
         }
     }
 

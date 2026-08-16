@@ -24,8 +24,17 @@ export const WorldMap: React.FC = () => {
   const [selectedRealmId, setSelectedRealmId] = useState<string>('starter-village');
   const [popoverNode, setPopoverNode] = useState<MapNode | null>(null);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(soundManager.enabled);
+  const mapCanvasRef = React.useRef<HTMLDivElement>(null);
 
   const activeRealm = realmsData.find(r => r.id === selectedRealmId) || realmsData[0];
+
+  React.useEffect(() => {
+    if (mapCanvasRef.current) {
+      // Auto-scroll internal viewport so starter nodes at bottom are centered comfortably
+      const containerHeight = mapCanvasRef.current.scrollHeight;
+      mapCanvasRef.current.scrollTop = containerHeight;
+    }
+  }, [selectedRealmId]);
 
   const toggleSound = () => {
     soundManager.enabled = !soundEnabled;
@@ -109,12 +118,13 @@ export const WorldMap: React.FC = () => {
   return (
     <div style={{
       width: '100%',
-      minHeight: 'calc(100vh - 68px)',
+      height: '100%',
+      flex: 1,
       background: 'var(--bg-dark)',
       display: 'flex',
       flexDirection: 'column',
       position: 'relative',
-      paddingBottom: '40px'
+      overflow: 'hidden'
     }}>
       {/* Realm Selection Filter Bar */}
       <div style={{
@@ -177,16 +187,19 @@ export const WorldMap: React.FC = () => {
       </div>
 
       {/* Main Gamified RPG Map Canvas */}
-      <div style={{
-        flex: 1,
-        margin: 'clamp(8px, 2vw, 24px)',
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border-subtle)',
-        borderRadius: 'var(--radius-lg)',
-        position: 'relative',
-        minHeight: '1800px',
-        overflow: 'auto'
-      }}>
+      <div
+        ref={mapCanvasRef}
+        style={{
+          flex: 1,
+          margin: '12px',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-subtle)',
+          borderRadius: 'var(--radius-lg)',
+          position: 'relative',
+          overflowY: 'auto',
+          overflowX: 'hidden'
+        }}
+      >
         {/* Realm Header Info Badge */}
         <div style={{
           position: 'sticky',

@@ -15,8 +15,6 @@ import { CodeDuel } from './components/duels/CodeDuel';
 import { Leaderboards } from './components/leaderboards/Leaderboards';
 import { Championship } from './components/championship/Championship';
 import { DeveloperHQ } from './components/hq/DeveloperHQ';
-import { CareerCompany } from './components/career/CareerCompany';
-import { PlayerProfileView } from './components/profile/PlayerProfile';
 import { AdminConsole } from './components/admin/AdminConsole';
 import { AdminDashboardPortal } from './components/admin/AdminDashboardPortal';
 import { Sparkles } from 'lucide-react';
@@ -42,10 +40,6 @@ const MainAppContent: React.FC = () => {
         return <Championship />;
       case 'hq':
         return <DeveloperHQ />;
-      case 'career':
-        return <CareerCompany />;
-      case 'profile':
-        return <PlayerProfileView />;
       case 'admin':
         return <AdminConsole />;
       default:
@@ -72,7 +66,7 @@ const MainAppContent: React.FC = () => {
           onToggleMenu={() => setIsMobileMenuOpen(prev => !prev)}
         />
 
-        <main className="page-content" style={{ padding: activeTab === 'challenge' ? 0 : 'var(--page-padding)' }}>
+        <main className="page-content" style={{ padding: (activeTab === 'challenge' || activeTab === 'world') ? 0 : 'var(--page-padding)', overflow: activeTab === 'world' ? 'hidden' : 'auto' }}>
           {renderActiveView()}
         </main>
       </div>

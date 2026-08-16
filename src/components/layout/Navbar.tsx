@@ -5,8 +5,6 @@ import {
   GiScrollUnfurled as Globe, 
   GiCrossedSwords as Swords, 
   GiTrophyCup as Trophy, 
-  GiSchoolBag as Briefcase, 
-  GiCharacter as User, 
   GiDragonHead as Flame, 
   GiStarMedal as Star, 
   GiCoins as Coins, 
@@ -27,9 +25,7 @@ export const Navbar: React.FC = () => {
     { id: 'challenge', label: 'CHALLENGES', icon: <Code2 size={18} /> },
     { id: 'duel', label: 'ARENA', icon: <Swords size={18} /> },
     { id: 'hq', label: 'HQ & PET', icon: <Layers size={18} /> },
-    { id: 'leaderboards', label: 'RANKINGS', icon: <Trophy size={18} /> },
-    { id: 'career', label: 'CAREER', icon: <Briefcase size={18} /> },
-    { id: 'profile', label: 'PROFILE', icon: <User size={18} /> }
+    { id: 'leaderboards', label: 'RANKINGS', icon: <Trophy size={18} /> }
   ];
 
   return (
@@ -57,18 +53,17 @@ export const Navbar: React.FC = () => {
             cursor: 'pointer' 
           }}
         >
-          <div style={{
-            background: 'linear-gradient(135deg, var(--accent-gold) 0%, var(--accent-orange) 100%)',
-            padding: '8px',
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--bg-dark)',
-            boxShadow: 'var(--shadow-gold)'
-          }}>
-            <Sparkles size={22} strokeWidth={2.5} />
-          </div>
+          <img
+            src="/logo.jpg"
+            alt="CODE REALM"
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '8px',
+              objectFit: 'cover',
+              border: '1px solid var(--border-bright)'
+            }}
+          />
           <div>
             <div style={{ 
               fontFamily: 'var(--font-display)', 

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useGame } from '../../context/GameContext';
+import { FormattedText } from '../ui/FormattedText';
 import { X, Bot, Send, Sparkles, Lightbulb, BookOpen, HelpCircle, Code } from 'lucide-react';
 
 export const AICompanionModal: React.FC = () => {
@@ -215,8 +216,8 @@ export const AICompanionModal: React.FC = () => {
                 <span>{msg.sender === 'ai' ? 'AI GAME MASTER' : profile.username}</span>
                 <span style={{ marginLeft: 'auto', opacity: 0.7, fontWeight: 400 }}>{msg.time}</span>
               </div>
-              <div style={{ lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
-                {msg.text}
+              <div style={{ lineHeight: 1.5 }}>
+                <FormattedText text={msg.text} />
               </div>
             </div>
           ))}

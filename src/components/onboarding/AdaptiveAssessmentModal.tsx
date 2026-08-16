@@ -1,18 +1,54 @@
 import React, { useState } from 'react';
 import { useGame } from '../../context/GameContext';
-import { Brain, ArrowRight, Zap } from 'lucide-react';
+import { api } from '../../services/api';
+import { Brain, ArrowRight, Zap, Check, X } from 'lucide-react';
 
 export const AdaptiveAssessmentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
-  const { triggerNotification } = useGame();
+  const { setProfile, triggerNotification } = useGame();
   const [step, setStep] = useState<number>(1);
+  const [language, setLanguage] = useState<string>('python');
   const [experience, setExperience] = useState<string>('Beginner');
-  const [goal, setGoal] = useState<string>('Full-Stack Engineer');
+  const [goal, setGoal] = useState<string>('Full-Stack Developer');
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   if (!isOpen) return null;
 
-  const handleFinish = () => {
-    triggerNotification('🎯 AI Assessment Complete! Personalized Journey Map generated.');
-    onClose();
+  const handleFinish = async () => {
+    setIsSubmitting(true);
+    try {
+      const res = await api.saveOnboarding({
+        preferred_language: language,
+        skill_level: experience,
+        career_goal: goal,
+        goals: [goal]
+      });
+
+      const eloMap: Record<string, number> = {
+        'Child / absolute beginner': 300,
+        'Beginner (Basic Syntax)': 500,
+        'Intermediate (Building Apps)': 800,
+        'Advanced Engineer': 1200
+      };
+
+      const newElo = res.profile?.rank_rating || eloMap[experience] || 500;
+
+      setProfile(prev => ({
+        ...prev,
+        rankRating: newElo,
+        skills: {
+          ...prev.skills,
+          [language]: newElo
+        }
+      }));
+
+      triggerNotification(`🎯 Adaptive Roadmap Calibrated! ELO set to ${newElo} for ${language.toUpperCase()}.`);
+      onClose();
+    } catch (e: any) {
+      triggerNotification(e.message || 'Assessment complete. Journey map updated!');
+      onClose();
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -33,8 +69,24 @@ export const AdaptiveAssessmentModal: React.FC<{ isOpen: boolean; onClose: () =>
         padding: '32px',
         borderRadius: '20px',
         textAlign: 'center',
-        boxShadow: '0 0 50px rgba(217, 160, 54, 0.35)'
+        boxShadow: '0 0 50px rgba(217, 160, 54, 0.35)',
+        position: 'relative'
       }}>
+        <button
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: '20px',
+            right: '20px',
+            background: 'none',
+            border: 'none',
+            color: 'var(--text-muted)',
+            cursor: 'pointer',
+            zIndex: 10
+          }}
+        >
+          <X size={20} />
+        </button>
         {step === 1 && (
           <div>
             <div style={{
@@ -49,60 +101,116 @@ export const AdaptiveAssessmentModal: React.FC<{ isOpen: boolean; onClose: () =>
               borderRadius: '12px',
               marginBottom: '12px'
             }}>
-              <Brain size={14} /> ADAPTIVE ONBOARDING
+              <Brain size={14} /> ADAPTIVE ROADMAP ASSESSMENT
             </div>
-            <h2 style={{ fontSize: '28px', color: 'var(--text-main)', marginBottom: '8px' }}>
-              WELCOME TO CODE REALM
+            <h2 style={{ fontSize: '26px', color: 'var(--text-main)', marginBottom: '8px', fontFamily: 'var(--font-display)' }}>
+              SELECT PRIMARY CODING LANGUAGE
             </h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.6, marginBottom: '24px' }}>
-              Let's discover your current programming ability and learning style so the AI Game Master can build your personal journey map.
+            <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: 1.6, marginBottom: '24px' }}>
+              Choose which programming language you want to study and master in your primary realm path.
             </p>
 
-            <div style={{ textAlign: 'left', marginBottom: '24px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--accent-gold)', marginBottom: '8px', display: 'block' }}>
-                SELECT YOUR EXPERIENCE LEVEL
-              </label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                {['Child / absolute beginner', 'Beginner (Basic Syntax)', 'Intermediate (Building Apps)', 'Advanced Engineer'].map(lvl => (
-                  <button
-                    key={lvl}
-                    onClick={() => setExperience(lvl)}
-                    style={{
-                      background: experience === lvl ? 'rgba(217, 160, 54, 0.15)' : 'var(--bg-elevated)',
-                      border: '1px solid',
-                      borderColor: experience === lvl ? 'var(--accent-gold)' : 'var(--border-dark)',
-                      color: experience === lvl ? 'var(--accent-gold)' : 'var(--text-main)',
-                      padding: '12px',
-                      borderRadius: '8px',
-                      fontSize: '13px',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      textAlign: 'left'
-                    }}
-                  >
-                    {lvl}
-                  </button>
-                ))}
-              </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '24px' }}>
+              {[
+                { id: 'python', label: 'Python 🐍', desc: 'Data Science, AI & Backend' },
+                { id: 'javascript', label: 'JavaScript 📜', desc: 'Web Apps, Frontend & Node.js' },
+                { id: 'cpp', label: 'C++ ⚡', desc: 'Competitive Programming & Systems' },
+                { id: 'java', label: 'Java ☕', desc: 'Enterprise Systems & Android' },
+                { id: 'sql', label: 'SQL 𝄠', desc: 'Database Queries & Relational DBs' }
+              ].map(lang => (
+                <button
+                  key={lang.id}
+                  onClick={() => setLanguage(lang.id)}
+                  style={{
+                    background: language === lang.id ? 'rgba(217, 160, 54, 0.18)' : 'var(--bg-elevated)',
+                    border: '1px solid',
+                    borderColor: language === lang.id ? 'var(--accent-gold)' : 'var(--border-dark)',
+                    color: language === lang.id ? 'var(--accent-gold)' : 'var(--text-main)',
+                    padding: '16px',
+                    borderRadius: '12px',
+                    fontSize: '15px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    textAlign: 'left'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>{lang.label}</span>
+                    {language === lang.id && <Check size={16} color="var(--accent-gold)" />}
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', fontWeight: 500 }}>
+                    {lang.desc}
+                  </div>
+                </button>
+              ))}
             </div>
 
             <button onClick={() => setStep(2)} className="btn-primary" style={{ width: '100%', justifyContent: 'center', fontSize: '15px' }}>
-              CONTINUE ASSESSMENT <ArrowRight size={18} />
+              NEXT: EXPERIENCE LEVEL <ArrowRight size={18} />
             </button>
           </div>
         )}
 
         {step === 2 && (
           <div>
-            <h2 style={{ fontSize: '24px', color: 'var(--text-main)', marginBottom: '8px' }}>
-              🎯 CHOOSE YOUR CAREER GOAL
+            <h2 style={{ fontSize: '24px', color: 'var(--text-main)', marginBottom: '8px', fontFamily: 'var(--font-display)' }}>
+              SELECT YOUR SKILL LEVEL
             </h2>
             <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '20px' }}>
-              The AI will customize your world map nodes to match your target domain.
+              This calibrates your starting ELO rating and adaptive challenge difficulty.
             </p>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '24px' }}>
-              {['Backend Engineer', 'AI & LLM Engineer', 'Full-Stack Developer', 'Software Architect'].map(g => (
+              {[
+                { id: 'Child / absolute beginner', label: 'Child / Absolute Beginner', desc: 'ELO 300 · Simple intro logic' },
+                { id: 'Beginner (Basic Syntax)', label: 'Beginner', desc: 'ELO 500 · Basic syntax & loops' },
+                { id: 'Intermediate (Building Apps)', label: 'Intermediate', desc: 'ELO 800 · Functions & arrays' },
+                { id: 'Advanced Engineer', label: 'Advanced Engineer', desc: 'ELO 1200 · Algorithms & system design' }
+              ].map(lvl => (
+                <button
+                  key={lvl.id}
+                  onClick={() => setExperience(lvl.id)}
+                  style={{
+                    background: experience === lvl.id ? 'rgba(217, 160, 54, 0.15)' : 'var(--bg-elevated)',
+                    border: '1px solid',
+                    borderColor: experience === lvl.id ? 'var(--accent-gold)' : 'var(--border-dark)',
+                    color: experience === lvl.id ? 'var(--accent-gold)' : 'var(--text-main)',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    textAlign: 'left'
+                  }}
+                >
+                  <div>{lvl.label}</div>
+                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px', fontWeight: 500 }}>{lvl.desc}</div>
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button onClick={() => setStep(1)} className="btn-secondary" style={{ width: '30%', justifyContent: 'center' }}>
+                BACK
+              </button>
+              <button onClick={() => setStep(3)} className="btn-primary" style={{ width: '70%', justifyContent: 'center', fontSize: '15px' }}>
+                NEXT: CAREER GOAL <ArrowRight size={18} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div>
+            <h2 style={{ fontSize: '24px', color: 'var(--text-main)', marginBottom: '8px', fontFamily: 'var(--font-display)' }}>
+              🎯 TARGET CAREER PATH
+            </h2>
+            <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '20px' }}>
+              The AI Game Master will prioritize challenges targeting your goal.
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '24px' }}>
+              {['Full-Stack Developer', 'AI & LLM Engineer', 'Backend Architect', 'Game & Algorithmic Dev'].map(g => (
                 <button
                   key={g}
                   onClick={() => setGoal(g)}
@@ -111,7 +219,7 @@ export const AdaptiveAssessmentModal: React.FC<{ isOpen: boolean; onClose: () =>
                     border: '1px solid',
                     borderColor: goal === g ? 'var(--accent-orange)' : 'var(--border-dark)',
                     color: goal === g ? 'var(--accent-orange)' : 'var(--text-main)',
-                    padding: '12px',
+                    padding: '14px',
                     borderRadius: '8px',
                     fontSize: '13px',
                     fontWeight: 700,
@@ -123,9 +231,19 @@ export const AdaptiveAssessmentModal: React.FC<{ isOpen: boolean; onClose: () =>
               ))}
             </div>
 
-            <button onClick={handleFinish} className="btn-orange" style={{ width: '100%', justifyContent: 'center', fontSize: '15px' }}>
-              <Zap size={18} fill="currentColor" /> GENERATE MY PERSONAL JOURNEY MAP
-            </button>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button onClick={() => setStep(2)} className="btn-secondary" style={{ width: '30%', justifyContent: 'center' }}>
+                BACK
+              </button>
+              <button
+                onClick={handleFinish}
+                disabled={isSubmitting}
+                className="btn-orange"
+                style={{ width: '70%', justifyContent: 'center', fontSize: '15px' }}
+              >
+                <Zap size={18} fill="currentColor" /> {isSubmitting ? 'CALIBRATING ROADMAP...' : 'GENERATE MY ADAPTIVE ROADMAP'}
+              </button>
+            </div>
           </div>
         )}
       </div>

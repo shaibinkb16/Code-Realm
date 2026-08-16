@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useGame } from '../../context/GameContext';
-import { Sun, Moon, Brain, Menu } from 'lucide-react';
+import { SettingsModal } from '../settings/SettingsModal';
+import { FeedbackModal } from '../feedback/FeedbackModal';
+import { Sun, Moon, Brain, Menu, Settings as SettingsIcon, MessageSquare } from 'lucide-react';
 
 interface HeaderBarProps {
   onOpenAssessment: () => void;
@@ -9,6 +11,8 @@ interface HeaderBarProps {
 
 export const HeaderBar: React.FC<HeaderBarProps> = ({ onOpenAssessment, onToggleMenu }) => {
   const { activeTab, theme, toggleTheme } = useGame();
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState<boolean>(false);
 
   const getTitleInfo = () => {
     switch (activeTab) {
@@ -26,10 +30,6 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({ onOpenAssessment, onToggle
         return { title: 'Championship', subtitle: 'Season 01 tournament' };
       case 'hq':
         return { title: 'Study Labs', subtitle: 'Manage companion & study room upgrades' };
-      case 'career':
-        return { title: 'Class Board', subtitle: 'Homework assignment board & tutoring exams' };
-      case 'profile':
-        return { title: 'Report Card', subtitle: 'Your fundamental programming skill breakdown' };
       case 'admin':
         return { title: 'Admin Console', subtitle: 'System metrics, user management & moderation' };
       default:
@@ -63,6 +63,24 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({ onOpenAssessment, onToggle
 
       <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
         <button
+          onClick={() => setIsFeedbackOpen(true)}
+          className="btn-secondary"
+          title="App Feedback & Suggestions"
+        >
+          <MessageSquare size={16} />
+          <span>Feedback</span>
+        </button>
+
+        <button
+          onClick={() => setIsSettingsOpen(true)}
+          className="btn-secondary"
+          title="Explorer Settings"
+        >
+          <SettingsIcon size={16} />
+          <span>Settings</span>
+        </button>
+
+        <button
           onClick={toggleTheme}
           className="btn-secondary"
           title="Toggle Theme"
@@ -78,6 +96,17 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({ onOpenAssessment, onToggle
           <span>Adaptive Roadmap</span>
         </button>
       </div>
+
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        onOpenFeedback={() => setIsFeedbackOpen(true)}
+      />
+
+      <FeedbackModal
+        isOpen={isFeedbackOpen}
+        onClose={() => setIsFeedbackOpen(false)}
+      />
     </header>
   );
 };

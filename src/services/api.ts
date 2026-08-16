@@ -264,6 +264,104 @@ class ApiClient {
     if (!res.ok) throw new Error('Failed to save onboarding preferences');
     return await res.json();
   }
+
+  // --- User Profile, HQ & Pet Methods ---
+
+  async getUserProfile() {
+    const res = await this.fetchWithAuth(`${API_BASE_URL}/user/profile`, { method: 'GET' });
+    if (!res.ok) throw new Error('Failed to fetch user profile');
+    return await res.json();
+  }
+
+  async upgradeHq() {
+    const res = await this.fetchWithAuth(`${API_BASE_URL}/user/hq/upgrade`, { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to upgrade HQ');
+    }
+    return await res.json();
+  }
+
+  async upgradePet() {
+    const res = await this.fetchWithAuth(`${API_BASE_URL}/user/pet/upgrade`, { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to upgrade pet');
+    }
+    return await res.json();
+  }
+
+  async claimPassiveIncome() {
+    const res = await this.fetchWithAuth(`${API_BASE_URL}/user/hq/claim-passive`, { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to claim passive income');
+    }
+    return await res.json();
+  }
+
+  async submitFeedback(data: { category: string; rating: number; message: string }) {
+    const res = await this.fetchWithAuth(`${API_BASE_URL}/user/feedback`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to submit feedback');
+    }
+    return await res.json();
+  }
+
+  async getMyFeedback() {
+    const res = await this.fetchWithAuth(`${API_BASE_URL}/user/feedback/my`, { method: 'GET' });
+    if (!res.ok) throw new Error('Failed to fetch user feedback status');
+    return await res.json();
+  }
+
+  async getAdminFeedback() {
+    const res = await this.fetchWithAuth(`${API_BASE_URL}/admin/feedback`, { method: 'GET' });
+    if (!res.ok) throw new Error('Failed to fetch admin feedback logs');
+    return await res.json();
+  }
+
+  async updateFeedbackStatus(feedbackId: string, status: string, adminNotes?: string) {
+    const res = await this.fetchWithAuth(`${API_BASE_URL}/admin/feedback/${feedbackId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, admin_notes: adminNotes })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to update feedback status');
+    }
+    return await res.json();
+  }
+
+  async getAdminAnalytics() {
+    const res = await this.fetchWithAuth(`${API_BASE_URL}/admin/analytics`, { method: 'GET' });
+    if (!res.ok) throw new Error('Failed to fetch platform analytics');
+    return await res.json();
+  }
+
+  async deleteUserAccount(userId: string) {
+    const res = await this.fetchWithAuth(`${API_BASE_URL}/admin/users/${userId}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to delete user account');
+    }
+    return await res.json();
+  }
+
+  async bulkReviewChallenges(challengeIds: string[], reviewStatus: string) {
+    const res = await this.fetchWithAuth(`${API_BASE_URL}/admin/challenges/bulk-review`, {
+      method: 'POST',
+      body: JSON.stringify({ challenge_ids: challengeIds, review_status: reviewStatus })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to bulk review challenges');
+    }
+    return await res.json();
+  }
 }
 
 export const api = new ApiClient();

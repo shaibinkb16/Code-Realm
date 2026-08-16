@@ -8,11 +8,9 @@ import {
   Swords,
   Trophy,
   Building,
-  User,
   Star,
   Coins,
   Bot,
-  Zap,
   Award,
   ChevronRight,
   Flame,
@@ -48,11 +46,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenAiModal, isOpen, onClose
       ]
     },
     {
-      title: 'Student Matrix',
+      title: 'Hub',
       items: [
-        { id: 'hq' as ActiveTab, label: 'Study Labs', icon: Building },
-        { id: 'career' as ActiveTab, label: 'Class Board', icon: Zap },
-        { id: 'profile' as ActiveTab, label: 'Report Card', icon: User }
+        { id: 'hq' as ActiveTab, label: 'Study Labs', icon: Building }
       ]
     },
     ...((user?.role === 'admin' || user?.role === 'super_admin') ? [
@@ -84,18 +80,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenAiModal, isOpen, onClose
         alignItems: 'center',
         gap: 'var(--space-3)'
       }}>
-        <div style={{
-          width: '32px',
-          height: '32px',
-          borderRadius: 'var(--radius-md)',
-          background: 'var(--accent-primary)',
-          color: 'var(--bg-dark)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}>
-          <TerminalSquare size={18} strokeWidth={2.5} />
-        </div>
+        <img
+          src="/logo.jpg"
+          alt="CODE REALM"
+          style={{
+            width: '36px',
+            height: '36px',
+            borderRadius: 'var(--radius-md)',
+            objectFit: 'cover',
+            border: '1px solid var(--border-bright)'
+          }}
+        />
         <div>
           <h1 style={{
             fontSize: '15px',
