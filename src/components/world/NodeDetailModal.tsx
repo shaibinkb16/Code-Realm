@@ -9,7 +9,6 @@ import {
   GiPlayButton as Play,
   GiCheckMark as CheckCircle,
   GiFastForwardButton as ChevronRight,
-  GiStack as Layers,
   GiPadlock as Lock
 } from 'react-icons/gi';
 
