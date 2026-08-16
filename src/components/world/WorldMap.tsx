@@ -261,9 +261,16 @@ export const WorldMap: React.FC = () => {
 
           {/* Node Waypoint Renderers */}
           {activeRealm.nodes.map((node, index) => {
-            const isCompleted = profile.completedNodeIds.includes(node.id);
-            // Unlock logic: Node 1 is always unlocked. Others are unlocked if the previous node is completed.
-            const isUnlocked = index === 0 || profile.completedNodeIds.includes(activeRealm.nodes[index - 1].id);
+            const subLevels = node.subLevels || [];
+            const subCompletedCount = subLevels.filter(s => profile.completedNodeIds.includes(s.id)).length;
+            const isCompleted = profile.completedNodeIds.includes(node.id) || (subLevels.length > 0 && subCompletedCount >= subLevels.length);
+
+            const prevNode = index > 0 ? activeRealm.nodes[index - 1] : null;
+            const prevSubLevels = prevNode?.subLevels || [];
+            const prevSubCompletedCount = prevSubLevels.filter(s => profile.completedNodeIds.includes(s.id)).length;
+            const isPrevCompleted = !prevNode || profile.completedNodeIds.includes(prevNode.id) || (prevSubLevels.length > 0 && prevSubCompletedCount >= prevSubLevels.length);
+
+            const isUnlocked = index === 0 || isPrevCompleted;
             const isCurrentActive = isUnlocked && !isCompleted;
 
             return (
@@ -351,18 +358,23 @@ export const WorldMap: React.FC = () => {
                     {node.title}
                   </div>
                   {isUnlocked && (
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: '2px', marginTop: '2px' }}>
-                      {[1, 2, 3].map((s) => {
-                        const earnedStars = profile.nodeStars?.[node.id] || 0;
-                        return (
-                          <Star
-                            key={s}
-                            size={10}
-                            fill={s <= earnedStars ? 'var(--text-main)' : 'none'}
-                            color={s <= earnedStars ? 'var(--text-main)' : 'var(--text-dim)'}
-                          />
-                        );
-                      })}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', marginTop: '2px' }}>
+                      <div style={{ fontSize: '9.5px', fontWeight: 700, color: isCompleted ? '#34d399' : 'var(--accent-gold)', fontFamily: 'var(--font-mono)' }}>
+                        {subCompletedCount} / {subLevels.length || 100} Qs
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: '2px' }}>
+                        {[1, 2, 3].map((s) => {
+                          const earnedStars = profile.nodeStars?.[node.id] || 0;
+                          return (
+                            <Star
+                              key={s}
+                              size={10}
+                              fill={s <= earnedStars ? 'var(--text-main)' : 'none'}
+                              color={s <= earnedStars ? 'var(--text-main)' : 'var(--text-dim)'}
+                            />
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>

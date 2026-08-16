@@ -10,7 +10,7 @@ export const FormattedText: React.FC<Props> = ({ text, style }) => {
   if (!text) return null;
 
   const parseInlineFormatting = (str: string) => {
-    const parts = str.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+    const parts = str.split(/(\*\*[^*]+\*\*|`[^`]+`|\$[^$]+\$)/g);
     return parts.map((part, idx) => {
       if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
         return (
@@ -33,6 +33,27 @@ export const FormattedText: React.FC<Props> = ({ text, style }) => {
               border: '1px solid var(--border-subtle)',
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word'
+            }}
+          >
+            {part.slice(1, -1)}
+          </code>
+        );
+      }
+      if (part.startsWith('$') && part.endsWith('$') && part.length >= 3) {
+        return (
+          <code
+            key={idx}
+            style={{
+              background: 'rgba(217, 160, 54, 0.15)',
+              color: 'var(--accent-gold)',
+              padding: '2px 7px',
+              borderRadius: '4px',
+              fontFamily: 'var(--font-mono)',
+              fontWeight: 700,
+              fontSize: '0.9em',
+              border: '1px solid rgba(217, 160, 54, 0.3)',
+              display: 'inline-block',
+              margin: '0 2px'
             }}
           >
             {part.slice(1, -1)}

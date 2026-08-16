@@ -1,6 +1,49 @@
-import type { Realm } from '../types/game';
+import type { Realm, SubLevel, ChallengeType } from '../types/game';
 
-export const realmsData: Realm[] = [
+export const generate100SubLevels = (nodeId: string, nodeTitle: string, baseType: ChallengeType): SubLevel[] => {
+  const levels: SubLevel[] = [];
+  const cleanTitle = nodeTitle.replace(/^\d+\.\s*/, '');
+
+  for (let i = 1; i <= 100; i++) {
+    let type: ChallengeType = baseType;
+    let xp = 100 + Math.floor(i * 5);
+    let coins = 50 + Math.floor(i * 3);
+
+    if (i % 10 === 0 && i < 100) {
+      type = 'bughunt';
+      xp += 50;
+    } else if (i % 25 === 0 && i < 100) {
+      type = 'speedrun';
+      xp += 100;
+    } else if (i === 100) {
+      type = 'boss';
+      xp = 1000;
+      coins = 500;
+    }
+
+    const subTitle = i === 100
+      ? `Question 100/100: ${cleanTitle} — Overlord Boss Mastery 🐲`
+      : i % 10 === 0
+      ? `Question ${i}/100: ${cleanTitle} — Corruption Bug Hunt 🐛`
+      : i % 25 === 0
+      ? `Question ${i}/100: ${cleanTitle} — Speedrun Trial ⚡`
+      : `Question ${i}/100: ${cleanTitle} — Stage ${i}`;
+
+    levels.push({
+      id: `${nodeId}-sub-${i}`,
+      title: subTitle,
+      type: type,
+      xp: xp,
+      coins: coins,
+      completed: false,
+      stars: 0
+    });
+  }
+
+  return levels;
+};
+
+export const rawRealmsData: Realm[] = [
   {
     id: 'starter-village',
     name: 'EPIC 17-POINT CODE REALM',
@@ -316,3 +359,11 @@ export const realmsData: Realm[] = [
     ]
   }
 ];
+
+export const realmsData: Realm[] = rawRealmsData.map(realm => ({
+  ...realm,
+  nodes: realm.nodes.map(node => ({
+    ...node,
+    subLevels: generate100SubLevels(node.id, node.title, node.type)
+  }))
+}));

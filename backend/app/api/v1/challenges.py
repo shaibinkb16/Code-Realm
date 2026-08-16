@@ -39,10 +39,90 @@ def _format_challenge_dict(c: Challenge) -> dict:
     }
 
 
+import asyncio
+from app.core.logging import logger
+
+
+async def pregenerate_question_batch_background(
+    node_id: str,
+    node_title: str,
+    realm_name: str,
+    node_type: str,
+    skill_rating: int,
+    target_language: str,
+    start_index: int = 10,
+    count: int = 10
+):
+    """
+    Background worker that pre-generates the next batch of AI questions (default 10)
+    and saves them to the PostgreSQL database for instant reuse across all players.
+    """
+    from app.core.database import AsyncSessionLocal
+    async with AsyncSessionLocal() as session:
+        try:
+            batch_res = await ai_mentor_service.generate_challenge_batch(
+                node_title=node_title,
+                realm_name=realm_name,
+                node_type=node_type,
+                skill_rating=skill_rating,
+                target_language=target_language,
+                batch_size=count
+            )
+
+            generated_list = batch_res.get("challenges", [])
+            for idx, gen_c in enumerate(generated_list):
+                alt_idx = start_index + idx
+                c_id = f"{node_id}-{target_language}-q{alt_idx + 1}"
+                
+                existing_c = await session.get(Challenge, c_id)
+                if existing_c:
+                    continue
+
+                db_challenge = Challenge(
+                    id=c_id,
+                    node_id=node_id,
+                    realm_id=realm_name,
+                    alternate_index=alt_idx,
+                    min_skill_rating=max(100, skill_rating - 200),
+                    max_skill_rating=skill_rating + 500,
+                    title=gen_c.get("title", f"{node_title} Trial {alt_idx+1}"),
+                    type=gen_c.get("type", "puzzle"),
+                    difficulty=gen_c.get("difficulty", "Medium"),
+                    description=gen_c.get("description", ""),
+                    story_context=gen_c.get("storyContext", ""),
+                    initial_code=gen_c.get("initialCode", ""),
+                    language=target_language,
+                    xp_reward=gen_c.get("xpReward", 100 + (alt_idx * 5)),
+                    coin_reward=gen_c.get("coinReward", 50 + (alt_idx * 3)),
+                    explanation=gen_c.get("explanation", ""),
+                    tags=[node_title, realm_name],
+                    hints=gen_c.get("hints", []),
+                    generated_by="ai",
+                    validation_status="approved",
+                )
+                session.add(db_challenge)
+                await session.flush()
+
+                for tc in gen_c.get("testCases", []):
+                    db_tc = TestCase(
+                        challenge_id=c_id,
+                        input_data=str(tc.get("input", "")),
+                        expected_output=str(tc.get("expectedOutput", "")),
+                        description=tc.get("description", ""),
+                        is_hidden=False
+                    )
+                    session.add(db_tc)
+
+            await session.commit()
+            logger.info(f"Successfully pre-generated {len(generated_list)} AI questions for {node_id} ({target_language})")
+        except Exception as e:
+            logger.error(f"Error pre-generating question batch for {node_id}: {e}")
+
+
 # ─────────────────────────────────────────────────────────
 # GET /challenges/generate
 # Retrieves persistent question from PostgreSQL Question Bank
-# or batch-generates Primary + Alternates via Gemini 3.6 Flash
+# or batch-generates initial 10 questions via Gemini
 # ─────────────────────────────────────────────────────────
 @router.get("/generate")
 async def generate_challenge(
@@ -52,32 +132,13 @@ async def generate_challenge(
     node_type: str = Query(default="challenge", description="Node type: challenge or boss"),
     skill_rating: int = Query(default=905, description="Player skill rating (0-2500)"),
     target_language: str = Query(default="python", description="Target programming language"),
+    sub_level_index: int = Query(default=1, description="Sub-level question index (1-100)"),
     current_user: Optional[User] = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ):
     target_lang = target_language.lower()
 
-    # 1. If user is logged in, check existing assignment & saved code draft
-    if current_user:
-        res_assign = await db.execute(
-            select(UserNodeAssignment)
-            .options(selectinload(UserNodeAssignment.challenge).selectinload(Challenge.test_cases))
-            .where(
-                (UserNodeAssignment.user_id == current_user.id) &
-                (UserNodeAssignment.node_id == node_id)
-            )
-        )
-        assignment = res_assign.scalars().first()
-        if assignment and assignment.challenge and assignment.challenge.language == target_lang:
-            c = assignment.challenge
-            return {
-                "status": "SUCCESS",
-                "challenge": _format_challenge_dict(c),
-                "savedCode": assignment.saved_code or c.initial_code,
-                "isCompleted": assignment.is_completed
-            }
-
-    # 2. Check PostgreSQL Question Bank for pre-saved questions for this node_id & language
+    # 1. Check PostgreSQL Question Bank for pre-saved questions for this node_id & language
     res_chals = await db.execute(
         select(Challenge)
         .options(selectinload(Challenge.test_cases))
@@ -88,19 +149,28 @@ async def generate_challenge(
         .order_by(Challenge.alternate_index)
     )
     existing_challenges = res_chals.scalars().all()
+    pool_size = len(existing_challenges)
+
+    # Trigger background pre-generation of next 10 questions when reaching question 9, 19, 29...
+    if sub_level_index % 10 == 9 or (pool_size > 0 and pool_size - sub_level_index <= 2):
+        if pool_size < 100:
+            asyncio.create_task(
+                pregenerate_question_batch_background(
+                    node_id=node_id,
+                    node_title=node_title,
+                    realm_name=realm_name,
+                    node_type=node_type,
+                    skill_rating=skill_rating,
+                    target_language=target_lang,
+                    start_index=pool_size,
+                    count=10
+                )
+            )
 
     if existing_challenges:
-        primary_challenge = existing_challenges[0]
-        if current_user:
-            new_assign = UserNodeAssignment(
-                user_id=current_user.id,
-                node_id=node_id,
-                challenge_id=primary_challenge.id,
-                saved_code=primary_challenge.initial_code,
-                is_completed=False
-            )
-            db.add(new_assign)
-            await db.commit()
+        # Pick question matching sub_level_index (1-indexed) or modulo pool size
+        target_idx = (sub_level_index - 1) % pool_size
+        primary_challenge = existing_challenges[target_idx]
 
         return {
             "status": "SUCCESS",
@@ -109,13 +179,14 @@ async def generate_challenge(
             "isCompleted": False
         }
 
-    # 3. No questions in DB: Batch-generate 3 challenges (Primary + 2 Alternates) via Gemini 3.6 Flash
+    # 2. No initial pool in DB: Batch-generate 10 initial questions via Gemini
     batch_res = await ai_mentor_service.generate_challenge_batch(
         node_title=node_title,
         realm_name=realm_name,
         node_type=node_type,
         skill_rating=skill_rating,
         target_language=target_lang,
+        batch_size=10
     )
 
     generated_list = batch_res.get("challenges", [])

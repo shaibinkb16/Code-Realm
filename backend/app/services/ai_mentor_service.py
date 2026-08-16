@@ -153,35 +153,33 @@ class AIMentorService:
         realm_name: str,
         node_type: str,
         skill_rating: int,
-        target_language: str = "python"
+        target_language: str = "python",
+        batch_size: int = 10
     ) -> dict:
         """
-        Calls Gemini 3.6 Flash to batch-generate 3 distinct coding challenges
-        (1 Primary Challenge + 2 Alternate Challenges) for the node to store in PostgreSQL.
+        Calls Gemini to generate a batch of unique, persistent coding challenges
+        (default 10) for progressive pre-generation into PostgreSQL DB.
         """
         difficulty = "Easy" if skill_rating < 600 else ("Medium" if skill_rating < 1200 else "Hard")
-        if node_type.lower() == "boss":
-            difficulty = "Boss"
 
         system_prompt = (
             "You are an AI curriculum designer for CODE REALM, an RPG coding game. "
-            f"Generate a batch of 3 distinct, varied {target_language.capitalize()} coding challenges as a valid JSON array of 3 objects. "
-            "The first challenge is the Primary Challenge, the next two are Alternate Challenges. "
-            "Each challenge must be unique, educational, and solvable. "
+            f"Generate a batch of exactly {batch_size} distinct {target_language.capitalize()} coding challenges as a valid JSON array. "
+            "Each challenge must be unique, educational, solvable, and tied to the node theme. "
             "Return ONLY valid JSON, no markdown fences."
         )
 
         user_prompt = f"""
-Generate 3 distinct {target_language.capitalize()} coding challenges (1 Primary + 2 Alternates) for:
+Generate {batch_size} distinct {target_language.capitalize()} coding challenges for:
 - Map Node: "{node_title}"
 - Realm: "{realm_name}"
 - Node Type: "{node_type}"
 - Player Skill Rating: {skill_rating}/2500 → Difficulty: {difficulty}
 
-Return a JSON array containing exactly 3 objects matching this schema:
+Return a JSON array containing exactly {batch_size} objects matching this schema:
 [
   {{
-    "title": "Short dramatic challenge title (Primary)",
+    "title": "Short dramatic challenge title",
     "type": "puzzle",
     "difficulty": "{difficulty}",
     "description": "Clear task description",

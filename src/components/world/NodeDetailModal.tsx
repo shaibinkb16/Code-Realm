@@ -1,3 +1,4 @@
+import React, { useState } from 'react';
 import type { MapNode } from '../../types/game';
 import { useGame } from '../../context/GameContext';
 import {
@@ -8,7 +9,8 @@ import {
   GiPlayButton as Play,
   GiCheckMark as CheckCircle,
   GiFastForwardButton as ChevronRight,
-  GiStack as Layers
+  GiStack as Layers,
+  GiPadlock as Lock
 } from 'react-icons/gi';
 
 interface Props {
@@ -19,19 +21,34 @@ interface Props {
 
 export const NodeDetailModal: React.FC<Props> = ({ node, onClose, onLaunch }) => {
   const { profile } = useGame();
+  const [activeRangeIdx, setActiveRangeIdx] = useState<number>(0);
 
   const currentStars = profile.nodeStars[node.id] || 0;
   const subLevels = node.subLevels || [];
 
+  const completedCount = subLevels.filter(s => profile.completedNodeIds.includes(s.id)).length;
+  const totalSubLevels = subLevels.length || 100;
+  const progressPercent = Math.round((completedCount / totalSubLevels) * 100);
+
+  const ranges = [
+    { label: '1 - 25', start: 0, end: 25 },
+    { label: '26 - 50', start: 25, end: 50 },
+    { label: '51 - 75', start: 50, end: 75 },
+    { label: '76 - 100', start: 75, end: 100 }
+  ];
+
+  const currentRange = ranges[activeRangeIdx];
+  const visibleSubLevels = subLevels.slice(currentRange.start, currentRange.end);
+
   return (
     <div style={{
       position: 'fixed', inset: 0,
-      background: 'rgba(0, 0, 0, 0.7)', backdropFilter: 'blur(4px)',
+      background: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(6px)',
       zIndex: 950, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 'var(--space-5)'
+      padding: 'var(--space-4)'
     }}>
       <div className="realm-card" style={{
-        width: '480px', maxWidth: '100%', maxHeight: '90vh',
+        width: '560px', maxWidth: '100%', maxHeight: '90vh',
         padding: 0, display: 'flex', flexDirection: 'column',
         border: node.type === 'boss' ? '1px solid var(--error)' : '1px solid var(--border-bright)'
       }}>
@@ -44,9 +61,9 @@ export const NodeDetailModal: React.FC<Props> = ({ node, onClose, onLaunch }) =>
               fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', marginBottom: 'var(--space-2)'
             }}>
               {node.type === 'boss' ? <Flame size={14} /> : <Zap size={14} />}
-              <span>{node.type} Waypoint • {subLevels.length > 0 ? `${subLevels.length} Sub-Levels` : '1 Trial'}</span>
+              <span>100-Level Waypoint • {completedCount} / {totalSubLevels} Cleared</span>
             </div>
-            <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-main)' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-main)' }}>
               {node.title}
             </h2>
           </div>
@@ -57,74 +74,109 @@ export const NodeDetailModal: React.FC<Props> = ({ node, onClose, onLaunch }) =>
         </div>
 
         {/* Content Body */}
-        <div style={{ padding: 'var(--space-6)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-          {/* Star History */}
-          <div className="flex-between" style={{ background: 'var(--bg-elevated)', padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-            <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-main)', textTransform: 'uppercase' }}>
-              Waypoint Rating
-            </div>
-            <div style={{ display: 'flex', gap: 'var(--space-1)' }}>
-              {[1, 2, 3].map((starNum) => (
-                <Star
-                  key={starNum}
-                  size={20}
-                  fill={starNum <= currentStars ? 'var(--text-main)' : 'none'}
-                  color={starNum <= currentStars ? 'var(--text-main)' : 'var(--text-dim)'}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Sub-Levels List */}
-          {subLevels.length > 0 && (
-            <div>
-              <div style={{
-                fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase',
-                marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)'
-              }}>
-                <Layers size={14} /> Sub-Level Trials ({subLevels.length})
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                {subLevels.map((sub, idx) => (
-                  <div key={sub.id} className="flex-between" style={{
-                    background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
-                    borderRadius: 'var(--radius-md)', padding: 'var(--space-3) var(--space-4)'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                      <div style={{
-                        width: '24px', height: '24px', borderRadius: '50%',
-                        background: sub.completed ? 'var(--text-main)' : 'var(--bg-dark)',
-                        color: sub.completed ? 'var(--bg-dark)' : 'var(--text-muted)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontWeight: 700, fontSize: '11px'
-                      }}>
-                        {sub.completed ? <CheckCircle size={14} /> : idx + 1}
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-main)' }}>{sub.title}</div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', gap: 'var(--space-2)', marginTop: '2px' }}>
-                          <span>+{sub.xp} XP</span><span>•</span><span>+{sub.coins} Coins</span>
-                        </div>
-                      </div>
-                    </div>
-                    <button onClick={onLaunch} className="btn-primary" style={{ padding: '4px 10px', fontSize: '12px' }}>
-                      <span>Play</span><ChevronRight size={14} />
-                    </button>
-                  </div>
+        <div style={{ padding: 'var(--space-5)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+          {/* Progress Bar & Rating */}
+          <div style={{ background: 'var(--bg-elevated)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+            <div className="flex-between" style={{ marginBottom: '8px' }}>
+              <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                Node Mastery Progress ({progressPercent}%)
+              </span>
+              <div style={{ display: 'flex', gap: 'var(--space-1)' }}>
+                {[1, 2, 3].map((starNum) => (
+                  <Star
+                    key={starNum}
+                    size={18}
+                    fill={starNum <= currentStars ? 'var(--accent-gold)' : 'none'}
+                    color={starNum <= currentStars ? 'var(--accent-gold)' : 'var(--text-dim)'}
+                  />
                 ))}
               </div>
             </div>
-          )}
+            <div style={{ height: '8px', background: 'var(--bg-dark)', borderRadius: '4px', overflow: 'hidden' }}>
+              <div style={{ width: `${progressPercent}%`, height: '100%', background: 'linear-gradient(90deg, #38bdf8, #34d399)', transition: 'width 0.4s ease' }} />
+            </div>
+          </div>
 
-          {/* Single Launch Action */}
+          {/* Sub-Levels Range Filter Tabs */}
+          <div style={{ display: 'flex', gap: '6px' }}>
+            {ranges.map((r, idx) => (
+              <button
+                key={r.label}
+                onClick={() => setActiveRangeIdx(idx)}
+                style={{
+                  flex: 1,
+                  padding: '6px 4px',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  border: activeRangeIdx === idx ? '1px solid var(--accent-gold)' : '1px solid var(--border-subtle)',
+                  background: activeRangeIdx === idx ? 'rgba(217, 160, 54, 0.15)' : 'var(--bg-elevated)',
+                  color: activeRangeIdx === idx ? 'var(--accent-gold)' : 'var(--text-muted)',
+                  cursor: 'pointer'
+                }}
+              >
+                Questions {r.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Sub-Levels List */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '320px', overflowY: 'auto' }}>
+            {visibleSubLevels.map((sub, idx) => {
+              const globalIdx = currentRange.start + idx;
+              const isCompleted = profile.completedNodeIds.includes(sub.id);
+              const isUnlocked = globalIdx === 0 || isCompleted || profile.completedNodeIds.includes(subLevels[globalIdx - 1]?.id);
+
+              return (
+                <div key={sub.id} className="flex-between" style={{
+                  background: isCompleted ? 'rgba(52, 211, 153, 0.08)' : isUnlocked ? 'var(--bg-elevated)' : 'rgba(0,0,0,0.3)',
+                  border: isCompleted ? '1px solid rgba(52, 211, 153, 0.3)' : isUnlocked ? '1px solid var(--border-subtle)' : '1px solid rgba(255,255,255,0.05)',
+                  borderRadius: 'var(--radius-md)', padding: '10px 14px', opacity: isUnlocked ? 1 : 0.6
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{
+                      width: '26px', height: '26px', borderRadius: '50%',
+                      background: isCompleted ? '#34d399' : isUnlocked ? 'var(--accent-gold)' : 'var(--bg-dark)',
+                      color: isCompleted || isUnlocked ? 'var(--bg-dark)' : 'var(--text-muted)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontWeight: 800, fontSize: '11px'
+                    }}>
+                      {isCompleted ? <CheckCircle size={14} color="#000" /> : isUnlocked ? globalIdx + 1 : <Lock size={12} />}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '13.5px', fontWeight: 700, color: isUnlocked ? 'var(--text-main)' : 'var(--text-muted)' }}>
+                        {sub.title}
+                      </div>
+                      <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', display: 'flex', gap: '8px', marginTop: '2px' }}>
+                        <span style={{ color: 'var(--accent-teal-bright)' }}>+{sub.xp} XP</span>
+                        <span>•</span>
+                        <span style={{ color: 'var(--accent-gold)' }}>+{sub.coins} Coins</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {isUnlocked ? (
+                    <button onClick={onLaunch} className="btn-primary" style={{ padding: '5px 12px', fontSize: '12px' }}>
+                      <span>Play Question</span><ChevronRight size={14} />
+                    </button>
+                  ) : (
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Lock size={12} /> Complete Q{globalIdx} to unlock
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Action Footer */}
           <div style={{ display: 'flex', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
             <button onClick={onClose} className="btn-secondary" style={{ flex: 1, justifyContent: 'center' }}>
               Back to Map
             </button>
             <button onClick={onLaunch} className="btn-primary" style={{ flex: 2, justifyContent: 'center', background: node.type === 'boss' ? 'var(--error)' : 'var(--accent-primary)', borderColor: node.type === 'boss' ? 'var(--error)' : 'var(--accent-primary)' }}>
               <Play size={16} fill="currentColor" />
-              <span>{node.type === 'boss' ? 'Fight Boss' : 'Start Trials'}</span>
+              <span>{node.type === 'boss' ? 'Fight Boss' : 'Enter Workstation'}</span>
             </button>
           </div>
         </div>

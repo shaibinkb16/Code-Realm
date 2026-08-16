@@ -50,7 +50,7 @@ export const AITeacherPanel: React.FC<Props> = ({ challengeId, userCode }) => {
   };
 
   const parseInlineFormatting = (text: string) => {
-    const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+    const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`|\$[^$]+\$)/g);
     return parts.map((part, idx) => {
       if (part.startsWith('**') && part.endsWith('**')) {
         return <strong key={idx} style={{ color: 'var(--accent-gold)', fontWeight: 700 }}>{part.slice(2, -2)}</strong>;
@@ -65,6 +65,24 @@ export const AITeacherPanel: React.FC<Props> = ({ challengeId, userCode }) => {
             fontFamily: 'var(--font-mono)',
             fontSize: '12px',
             border: '1px solid var(--border-subtle)'
+          }}>
+            {part.slice(1, -1)}
+          </code>
+        );
+      }
+      if (part.startsWith('$') && part.endsWith('$') && part.length >= 3) {
+        return (
+          <code key={idx} style={{
+            background: 'rgba(217, 160, 54, 0.15)',
+            color: 'var(--accent-gold)',
+            padding: '2px 6px',
+            borderRadius: '4px',
+            fontFamily: 'var(--font-mono)',
+            fontWeight: 700,
+            fontSize: '12px',
+            border: '1px solid rgba(217, 160, 54, 0.3)',
+            display: 'inline-block',
+            margin: '0 2px'
           }}>
             {part.slice(1, -1)}
           </code>
