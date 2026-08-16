@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { API_BASE_URL, api } from '../../services/api';
 import {
-  ShieldAlert,
   Users,
   Cpu,
   FileCheck,
@@ -13,7 +12,6 @@ import {
   Search,
   Activity,
   LogOut,
-  Zap,
   TrendingUp,
   Server,
   Database,
@@ -323,14 +321,12 @@ export const AdminDashboardPortal: React.FC<AdminDashboardPortalProps> = ({ onSw
     }
   };
 
-  const filteredUsers = usersList.filter(u => {
+const filteredUsers = usersList.filter(u => {
     const matchesSearch = u.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           u.email.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesRole = roleFilter === 'all' || u.role === roleFilter;
     return matchesSearch && matchesRole;
   });
-
-  const activeUsersCount = usersList.filter(u => u.is_active).length;
 
   return (
     <div style={{

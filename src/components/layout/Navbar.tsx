@@ -10,7 +10,6 @@ import {
   GiCoins as Coins, 
   GiRobotGolem as Bot, 
   GiAnvil as Code2,
-  GiSparkles as Sparkles,
   GiShield as Shield,
   GiStack as Layers
 } from 'react-icons/gi';

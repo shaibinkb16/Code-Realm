@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { api } from '../../services/api';
 import { useGame } from '../../context/GameContext';
-import { Sparkles, Check, ArrowRight, Code2 } from 'lucide-react';
+import { Sparkles, Check, ArrowRight } from 'lucide-react';
 
 interface OnboardingFlowProps {
   onComplete: () => void;

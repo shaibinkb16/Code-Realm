@@ -62,7 +62,7 @@ interface ExecutionResult {
 const API_BASE = API_BASE_URL;
 
 export const ChallengeEditor: React.FC = () => {
-  const { activeNode, setActiveTab, completeChallenge, profile, theme } = useGame();
+  const { activeNode, setActiveTab, completeChallenge, profile, setProfile, theme } = useGame();
 
   const [challenge, setChallenge] = useState<AIChallenge | null>(null);
   const [isLoadingChallenge, setIsLoadingChallenge] = useState(true);
