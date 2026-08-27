@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { API_BASE_URL } from '../../services/api';
-import { Timer, Zap, Trophy, ArrowLeft, Bot, Loader, CheckCircle, XCircle } from 'lucide-react';
-import { AIOpponentsSelector } from './AIOpponentsSelector';
+import { Timer, Zap, Trophy, ArrowLeft, Bot, Loader, CheckCircle, XCircle, RotateCcw, Swords } from 'lucide-react';
+import { AIOpponentsSelector, aiBots, type AIBot } from './AIOpponentsSelector';
 
 const API_BASE = API_BASE_URL;
 
@@ -46,43 +46,71 @@ export const CodeDuel: React.FC = () => {
   const [output, setOutput] = useState('');
   const [eloChange, setEloChange] = useState(0);
   const [xpEarned, setXpEarned] = useState(0);
+  const [roundIndex, setRoundIndex] = useState(1);
+  const [currentOpponent, setCurrentOpponent] = useState<AIBot>(aiBots[2]);
+
+  const loadDuelChallenge = async (round: number, opponent?: AIBot) => {
+    setIsLoadingChallenge(true);
+    setDuelFinished(false);
+    setPlayerWon(false);
+    setSecondsLeft(150);
+    setOpponentProgress(0);
+    setPlayerProgress(0);
+    setTestResults([]);
+    setOutput('');
+    const targetOpponent = opponent || currentOpponent;
+    if (opponent) setCurrentOpponent(opponent);
+
+    try {
+      const params = new URLSearchParams({
+        node_id: `duel-${targetOpponent.id}`,
+        node_title: `1v1 Code Duel — Round ${round}`,
+        realm_name: 'Duel Arena',
+        node_type: 'duel',
+        skill_rating: String(targetOpponent.rating || profile.rankRating || 905),
+        sub_level_index: String(round)
+      });
+      const resp = await fetch(`${API_BASE}/challenges/generate?${params}`);
+      if (!resp.ok) throw new Error();
+      const data = await resp.json();
+      setChallenge(data.challenge);
+      setCode(data.challenge.initialCode);
+    } catch {
+      const fallback: DuelChallenge = {
+        title: `Round ${round}: Rapid Speed Trial`,
+        description: 'Write a function solve(s) that filters and returns only the alphanumeric characters in a given string.',
+        initialCode: 'def solve(s):\n    # Write your solution here\n    pass\n',
+        testCases: [
+          { id: 't1', input: '"hello_world 123!"', expectedOutput: 'helloworld123', description: 'Filters symbols and spaces' },
+          { id: 't2', input: '"Code#Realm@2026"', expectedOutput: 'CodeRealm2026', description: 'Keeps alphanumeric characters' },
+        ],
+        xpReward: 500,
+        coinReward: 200,
+      };
+      setChallenge(fallback);
+      setCode(fallback.initialCode);
+    } finally {
+      setIsLoadingChallenge(false);
+    }
+  };
 
   useEffect(() => {
-    const generateDuel = async () => {
-      setIsLoadingChallenge(true);
-      try {
-        const params = new URLSearchParams({
-          node_id: 'duel',
-          node_title: '1v1 Code Duel',
-          realm_name: 'Duel Arena',
-          node_type: 'duel',
-          skill_rating: String(profile.rankRating || 905),
-        });
-        const resp = await fetch(`${API_BASE}/challenges/generate?${params}`);
-        if (!resp.ok) throw new Error();
-        const data = await resp.json();
-        setChallenge(data.challenge);
-        setCode(data.challenge.initialCode);
-      } catch {
-        const fallback: DuelChallenge = {
-          title: 'Reverse String Battle',
-          description: 'Write a function reverse_words(s) that reverses the order of words in a sentence.',
-          initialCode: 'def reverse_words(s):\n    # Your code here\n    pass\n\nprint(reverse_words("hello world"))',
-          testCases: [
-            { id: 't1', input: '', expectedOutput: 'world hello', description: 'Reverses hello world' },
-            { id: 't2', input: '', expectedOutput: 'c b a', description: 'Reverses a b c' },
-          ],
-          xpReward: 500,
-          coinReward: 200,
-        };
-        setChallenge(fallback);
-        setCode(fallback.initialCode);
-      } finally {
-        setIsLoadingChallenge(false);
-      }
-    };
-    generateDuel();
+    loadDuelChallenge(1);
   }, []);
+
+  const handleNextDuel = () => {
+    const nextRound = roundIndex + 1;
+    setRoundIndex(nextRound);
+    triggerNotification(`⚔️ Initiating Duel Round ${nextRound}...`);
+    loadDuelChallenge(nextRound);
+  };
+
+  const handleChallengeBot = (bot: AIBot) => {
+    const nextRound = roundIndex + 1;
+    setRoundIndex(nextRound);
+    triggerNotification(`⚔️ Challenging ${bot.name} (${bot.rating} ELO)!`);
+    loadDuelChallenge(nextRound, bot);
+  };
 
   useEffect(() => {
     if (isLoadingChallenge || secondsLeft <= 0 || duelFinished) return;
@@ -144,11 +172,11 @@ export const CodeDuel: React.FC = () => {
         const xp = challenge.xpReward;
         setEloChange(elo);
         setXpEarned(xp);
-        completeChallenge('duel', 3, xp, challenge.coinReward);
+        completeChallenge(`duel-round-${roundIndex}`, 3, xp, challenge.coinReward);
         triggerNotification(`Duel Victory! +${elo} ELO | +${xp} XP`);
-        setOutput(`✅ All tests passed — You win the duel!`);
+        setOutput(`✅ All tests passed — You win Round ${roundIndex}!`);
       } else {
-        setOutput(`${passed}/${total} tests passed. Keep improving!`);
+        setOutput(`${passed}/${total} tests passed. Check Your Output below.`);
       }
     } catch {
       setOutput('❌ Could not reach execution backend.');
@@ -162,8 +190,8 @@ export const CodeDuel: React.FC = () => {
       <div className="flex-center" style={{ width: '100%', height: 'calc(100vh - 56px)', flexDirection: 'column', gap: 'var(--space-4)' }}>
         <Loader size={32} color="var(--text-main)" style={{ animation: 'spin 1s linear infinite' }} />
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-main)' }}>Generating Duel...</div>
-          <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>Finding an opponent near {profile.rankRating} ELO</div>
+          <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-main)' }}>Generating Round {roundIndex} Duel...</div>
+          <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>Matching against {currentOpponent.name} ({currentOpponent.rating} ELO)</div>
         </div>
         <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       </div>
@@ -175,9 +203,14 @@ export const CodeDuel: React.FC = () => {
 
       {/* Top Bar */}
       <div className="flex-between" style={{ flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-        <button onClick={() => setActiveTab('world')} className="btn-secondary">
-          <ArrowLeft size={16} /> Exit Arena
-        </button>
+        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          <button onClick={() => setActiveTab('world')} className="btn-secondary">
+            <ArrowLeft size={16} /> Exit Arena
+          </button>
+          <button onClick={handleNextDuel} className="btn-secondary" title="Skip to next duel question">
+            <RotateCcw size={14} /> Next Question
+          </button>
+        </div>
         <div style={{
           background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
           padding: 'var(--space-2) var(--space-5)', borderRadius: 'var(--radius-full)',
@@ -200,16 +233,19 @@ export const CodeDuel: React.FC = () => {
           </div>
         </div>
 
-        <div style={{ fontWeight: 800, fontSize: '18px', color: 'var(--text-muted)', fontStyle: 'italic' }}>VS</div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--accent-gold)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>ROUND {roundIndex}</div>
+          <div style={{ fontWeight: 800, fontSize: '20px', color: 'var(--text-muted)', fontStyle: 'italic' }}>VS</div>
+        </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', textAlign: 'right' }}>
           <div>
             <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>AI Opponent</div>
-            <h3 style={{ fontSize: '18px', color: 'var(--text-main)', fontWeight: 700 }}>Algorithm Bot</h3>
-            <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{Math.max(800, (profile.rankRating || 905) - 50)} ELO</div>
+            <h3 style={{ fontSize: '18px', color: 'var(--text-main)', fontWeight: 700 }}>{currentOpponent.name}</h3>
+            <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{currentOpponent.rating} ELO</div>
           </div>
-          <div style={{ width: '52px', height: '52px', borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Bot size={28} color="var(--text-muted)" />
+          <div style={{ width: '52px', height: '52px', borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px' }}>
+            {currentOpponent.avatar}
           </div>
         </div>
       </div>
@@ -218,7 +254,7 @@ export const CodeDuel: React.FC = () => {
       <div className="realm-card" style={{ padding: 'var(--space-4)' }}>
         {[
           { label: 'Your Progress', pct: playerProgress, color: 'var(--success)' },
-          { label: 'Opponent Progress', pct: opponentProgress, color: 'var(--warning)' },
+          { label: `${currentOpponent.name} Progress`, pct: opponentProgress, color: 'var(--warning)' },
         ].map(({ label, pct, color }) => (
           <div key={label} style={{ marginBottom: 'var(--space-3)' }}>
             <div className="flex-between" style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 'var(--space-1)' }}>
@@ -297,10 +333,10 @@ export const CodeDuel: React.FC = () => {
         </div>
       ) : (
         /* Result */
-        <div className="realm-card" style={{ maxWidth: '500px', margin: '0 auto', padding: 'var(--space-8)', textAlign: 'center', border: playerWon ? '1px solid var(--success)' : '1px solid var(--border-subtle)' }}>
+        <div className="realm-card" style={{ maxWidth: '540px', margin: '0 auto', padding: 'var(--space-8)', textAlign: 'center', border: playerWon ? '1px solid var(--success)' : '1px solid var(--border-subtle)' }}>
           {playerWon
-            ? <><Trophy size={48} color="var(--success)" style={{ marginBottom: 'var(--space-4)' }} /><h2 style={{ fontSize: '24px', color: 'var(--text-main)', marginBottom: 'var(--space-6)', fontWeight: 700 }}>Duel Victory!</h2></>
-            : <><Bot size={48} color="var(--text-muted)" style={{ marginBottom: 'var(--space-4)' }} /><h2 style={{ fontSize: '24px', color: 'var(--text-muted)', marginBottom: 'var(--space-6)', fontWeight: 700 }}>Duel Defeat</h2></>
+            ? <><Trophy size={48} color="var(--success)" style={{ marginBottom: 'var(--space-4)' }} /><h2 style={{ fontSize: '24px', color: 'var(--text-main)', marginBottom: 'var(--space-6)', fontWeight: 700 }}>Round {roundIndex} Victory!</h2></>
+            : <><Bot size={48} color="var(--text-muted)" style={{ marginBottom: 'var(--space-4)' }} /><h2 style={{ fontSize: '24px', color: 'var(--text-muted)', marginBottom: 'var(--space-6)', fontWeight: 700 }}>Round {roundIndex} Defeat</h2></>
           }
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
             <div style={{ background: 'var(--bg-surface)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
@@ -312,11 +348,18 @@ export const CodeDuel: React.FC = () => {
               <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-main)' }}>+{xpEarned}</div>
             </div>
           </div>
-          <button onClick={() => setActiveTab('world')} className="btn-primary" style={{ padding: 'var(--space-3) var(--space-6)' }}>Return to World</button>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+            <button onClick={handleNextDuel} className="btn-primary" style={{ padding: 'var(--space-3) var(--space-6)' }}>
+              <Swords size={16} /> Next Match
+            </button>
+            <button onClick={() => setActiveTab('world')} className="btn-secondary" style={{ padding: 'var(--space-3) var(--space-6)' }}>
+              Return to World
+            </button>
+          </div>
         </div>
       )}
 
-      <AIOpponentsSelector onSelectBot={(bot) => triggerNotification(`Challenged ${bot.name} (${bot.rating} ELO)!`)} />
+      <AIOpponentsSelector onSelectBot={handleChallengeBot} />
     </div>
   );
 };
