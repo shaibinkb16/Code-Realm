@@ -173,15 +173,32 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose })
         </button>
 
         {/* Modal Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
           <div style={{ background: 'rgba(217, 160, 54, 0.15)', padding: '8px', borderRadius: '10px', color: 'var(--accent-gold)' }}>
             <MessageSquare size={22} />
           </div>
           <div>
             <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-main)', fontFamily: 'var(--font-display)', lineHeight: 1.2 }}>
-              FEEDBACK & BUG REPORTS
+              FEEDBACK & SUGGESTIONS
             </h2>
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Report bugs, submit suggestions & track resolution status</div>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Help shape Code Realm with your ideas and bug reports</div>
+          </div>
+        </div>
+
+        {/* Active Development Notice Banner */}
+        <div style={{
+          background: 'rgba(99, 102, 241, 0.12)',
+          border: '1px solid rgba(99, 102, 241, 0.3)',
+          borderRadius: '10px',
+          padding: '10px 14px',
+          marginBottom: '14px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px'
+        }}>
+          <span style={{ fontSize: '16px' }}>🚀</span>
+          <div style={{ fontSize: '12px', color: 'var(--text-main)', lineHeight: 1.4 }}>
+            <strong>Code Realm is under active development!</strong> We review all feedback daily — share your suggestions, ideas, or report any issues below.
           </div>
         </div>
 
@@ -201,7 +218,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose })
               cursor: 'pointer'
             }}
           >
-            Submit Feedback
+            Submit Suggestion / Report
           </button>
           <button
             onClick={() => setActiveSubTab('my_reports')}
@@ -217,7 +234,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose })
               cursor: 'pointer'
             }}
           >
-            My Reports & Bug Status
+            My Reports & Status
           </button>
         </div>
 
@@ -230,7 +247,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose })
                   FEEDBACK SUBMITTED!
                 </h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
-                  Your report has been logged. You can check its resolution status in the "My Reports" tab.
+                  Your suggestion has been logged. You can check its review and fix status in the "My Reports" tab.
                 </p>
               </div>
             ) : (
@@ -238,7 +255,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose })
                 {/* Category Selector */}
                 <div style={{ marginBottom: '18px' }}>
                   <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--accent-gold)', marginBottom: '6px', display: 'block', textTransform: 'uppercase' }}>
-                    Feedback Category
+                    Category
                   </label>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                     {[
