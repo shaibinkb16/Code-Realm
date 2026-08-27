@@ -6,7 +6,7 @@ import { SocialAuthButtons } from './SocialAuthButtons';
 import { EmailLoginForm } from './EmailLoginForm';
 import { OnboardingFlow } from './OnboardingFlow';
 import { SessionManager } from './SessionManager';
-import { TrendingUp, Target, Users, ShieldCheck, Lock, ArrowLeft, Moon } from 'lucide-react';
+import { TrendingUp, Target, Users, Lock, ArrowLeft } from 'lucide-react';
 import './AuthView.css';
 
 type AuthViewMode = 'login' | 'register' | 'otp' | 'onboarding' | 'security';
@@ -140,17 +140,6 @@ export const AuthLayout: React.FC = () => {
             <span className="cr-logo-icon">&lt;/&gt;</span>
             <span className="cr-logo-text">CODE</span>
             <span className="cr-logo-sub">REALM</span>
-          </div>
-
-          <div className="cr-header-actions">
-            <button
-              type="button"
-              onClick={() => setViewMode((viewMode as string) === 'security' ? 'login' : 'security')}
-              className="cr-sec-center-btn"
-            >
-              <ShieldCheck size={14} />
-              <span>Security Center</span>
-            </button>
           </div>
         </header>
 
@@ -310,11 +299,6 @@ export const AuthLayout: React.FC = () => {
             <a href="#privacy" className="cr-footer-link">Privacy</a>
             <a href="#terms" className="cr-footer-link">Terms</a>
             <a href="#help" className="cr-footer-link">Help</a>
-          </div>
-
-          <div className="cr-theme-toggle">
-            <Moon size={12} />
-            <span>Dark</span>
           </div>
         </footer>
       </div>
