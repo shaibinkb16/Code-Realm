@@ -2,14 +2,13 @@ import React, { useState } from 'react';
 import { useGame } from '../../context/GameContext';
 import { SettingsModal } from '../settings/SettingsModal';
 import { FeedbackModal } from '../feedback/FeedbackModal';
-import { Sun, Moon, Brain, Menu, Settings as SettingsIcon, MessageSquare } from 'lucide-react';
+import { Sun, Moon, Menu, Settings as SettingsIcon, MessageSquare } from 'lucide-react';
 
 interface HeaderBarProps {
-  onOpenAssessment: () => void;
   onToggleMenu: () => void;
 }
 
-export const HeaderBar: React.FC<HeaderBarProps> = ({ onOpenAssessment, onToggleMenu }) => {
+export const HeaderBar: React.FC<HeaderBarProps> = ({ onToggleMenu }) => {
   const { activeTab, theme, toggleTheme } = useGame();
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState<boolean>(false);
@@ -86,14 +85,6 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({ onOpenAssessment, onToggle
           title="Toggle Theme"
         >
           {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-        </button>
-
-        <button
-          onClick={onOpenAssessment}
-          className="btn-secondary"
-        >
-          <Brain size={16} />
-          <span>Adaptive Roadmap</span>
         </button>
       </div>
 

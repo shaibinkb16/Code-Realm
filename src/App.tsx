@@ -6,7 +6,6 @@ import { AuthView } from './components/auth/AuthView';
 import { Sidebar } from './components/layout/Sidebar';
 import { HeaderBar } from './components/layout/HeaderBar';
 import { AICompanionModal } from './components/layout/AICompanionModal';
-import { AdaptiveAssessmentModal } from './components/onboarding/AdaptiveAssessmentModal';
 import { SpotlightTour } from './components/onboarding/SpotlightTour';
 import { WorldMap } from './components/world/WorldMap';
 import { ChallengeEditor } from './components/challenge/ChallengeEditor';
@@ -21,7 +20,6 @@ import { Sparkles } from 'lucide-react';
 
 const MainAppContent: React.FC = () => {
   const { activeTab, notification, setIsAiModalOpen } = useGame();
-  const [isAssessmentOpen, setIsAssessmentOpen] = useState<boolean>(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
   const renderActiveView = () => {
@@ -62,7 +60,6 @@ const MainAppContent: React.FC = () => {
 
       <div className="main-content">
         <HeaderBar 
-          onOpenAssessment={() => setIsAssessmentOpen(true)} 
           onToggleMenu={() => setIsMobileMenuOpen(prev => !prev)}
         />
 
@@ -72,7 +69,6 @@ const MainAppContent: React.FC = () => {
       </div>
 
       <AICompanionModal />
-      <AdaptiveAssessmentModal isOpen={isAssessmentOpen} onClose={() => setIsAssessmentOpen(false)} />
       <SpotlightTour />
 
       {notification && (

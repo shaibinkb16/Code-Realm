@@ -24,23 +24,23 @@ def get_mongo_db():
 
     try:
         from motor.motor_asyncio import AsyncIOMotorClient
-        _mongo_client = AsyncIOMotorClient(url, serverSelectionTimeoutMS=3000)
+        _mongo_client = AsyncIOMotorClient(url, serverSelectionTimeoutMS=1000)
         _mongo_db = _mongo_client.get_default_database(default="coderealm_fallback")
         logger.info("[MongoDB Fallback] Motor AsyncIOMotorClient initialized successfully.")
         return _mongo_db
     except Exception as e:
-        logger.error(f"[MongoDB Fallback] Failed to connect to MongoDB: {e}")
+        logger.warning(f"[MongoDB Fallback] Failed to connect to MongoDB: {e}")
         return None
 
 
 async def verify_mongo_connection() -> bool:
-    """Verifies that MongoDB cluster is reachable."""
+    """Verifies that MongoDB cluster is reachable with 1s timeout."""
     db = get_mongo_db()
     if db is None:
         return False
     try:
-        await db.command("ping")
+        await asyncio.wait_for(db.command("ping"), timeout=1.0)
         return True
     except Exception as e:
-        logger.warning(f"[MongoDB Fallback] MongoDB ping failed: {e}")
+        logger.debug(f"[MongoDB Fallback] MongoDB standby ping: {e}")
         return False
