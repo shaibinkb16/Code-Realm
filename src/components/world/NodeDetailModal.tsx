@@ -82,7 +82,7 @@ export const NodeDetailModal: React.FC<Props> = ({ node, onClose, onLaunch }) =>
               padding: '12px 16px',
               display: 'flex',
               alignItems: 'center',
-              justify: 'space-between'
+              justifyContent: 'space-between'
             }}>
               <div>
                 <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--accent-gold)' }}>
@@ -195,7 +195,7 @@ export const NodeDetailModal: React.FC<Props> = ({ node, onClose, onLaunch }) =>
             <button onClick={onClose} className="btn-secondary" style={{ flex: 1, justifyContent: 'center' }}>
               Back to Map
             </button>
-            <button onClick={onLaunch} className="btn-primary" style={{ flex: 2, justifyContent: 'center', background: node.type === 'boss' ? 'var(--error)' : 'var(--accent-primary)', borderColor: node.type === 'boss' ? 'var(--error)' : 'var(--accent-primary)' }}>
+            <button onClick={() => onLaunch()} className="btn-primary" style={{ flex: 2, justifyContent: 'center', background: node.type === 'boss' ? 'var(--error)' : 'var(--accent-primary)', borderColor: node.type === 'boss' ? 'var(--error)' : 'var(--accent-primary)' }}>
               <Play size={16} fill="currentColor" />
               <span>{node.type === 'boss' ? 'Fight Boss' : 'Enter Workstation'}</span>
             </button>

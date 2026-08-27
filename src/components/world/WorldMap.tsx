@@ -68,7 +68,7 @@ export const WorldMap: React.FC = () => {
     setPopoverNode(node);
   };
 
-  const handleStartNode = (node: MapNode) => {
+  const handleStartNode = (node: MapNode, _subIdx?: number) => {
     soundManager.playSuccess();
     setActiveNode(node);
     setPopoverNode(null);
