@@ -3,7 +3,7 @@ import { useGame } from '../../context/GameContext';
 import { Trophy, Crown, Timer, Swords } from 'lucide-react';
 
 export const Championship: React.FC = () => {
-  const { profile } = useGame();
+  const { profile, setActiveTab, triggerNotification } = useGame();
 
   const bracketData = {
     qualifiers: [
@@ -121,8 +121,15 @@ export const Championship: React.FC = () => {
                 <span>2</span>
               </div>
 
-              <button className="btn-primary" style={{ width: '100%', justifyContent: 'center', marginTop: 'var(--space-4)' }}>
-                <Swords size={16} /> Enter Match
+              <button
+                onClick={() => {
+                  triggerNotification('⚔️ Entering Season 01 Grand Finals Match against CipherLord!');
+                  setActiveTab('duel');
+                }}
+                className="btn-primary"
+                style={{ width: '100%', justifyContent: 'center', marginTop: 'var(--space-4)' }}
+              >
+                <Swords size={16} /> Enter Finals Match
               </button>
             </div>
           </div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { API_BASE_URL } from '../../services/api';
 import confetti from 'canvas-confetti';
-import { Flame, Zap, ArrowLeft, Trophy, Sparkles, Loader, CheckCircle, XCircle, Skull } from 'lucide-react';
+import { Flame, Zap, ArrowLeft, Trophy, Sparkles, Loader, CheckCircle, XCircle, Skull, RotateCcw } from 'lucide-react';
 
 const API_BASE = API_BASE_URL;
 
@@ -44,6 +44,7 @@ export const BossFight: React.FC = () => {
   const [playerHealth, setPlayerHealth] = useState(100);
   const [userCode, setUserCode] = useState('');
   const [isVictor, setIsVictor] = useState(false);
+  const [isDefeated, setIsDefeated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isExecuting, setIsExecuting] = useState(false);
   const [testResults, setTestResults] = useState<TestResult[]>([]);
@@ -144,11 +145,12 @@ export const BossFight: React.FC = () => {
         }
       } else {
         const dmg = 15 + Math.floor(Math.random() * 15);
-        setPlayerHealth(prev => Math.max(0, prev - dmg));
-        setExecutionOutput(`❌ Tests failed — Boss deals ${dmg} damage to you!\n\n${result.output}`);
-        if (playerHealth - dmg <= 0) {
-          triggerNotification('You were defeated! Try again!');
-          setTimeout(() => setActiveTab('world'), 2000);
+        const remainingHp = Math.max(0, playerHealth - dmg);
+        setPlayerHealth(remainingHp);
+        setExecutionOutput(`❌ Tests failed — Boss deals ${dmg} damage to you!\n\n${result.output || ''}`);
+        if (remainingHp <= 0) {
+          setIsDefeated(true);
+          triggerNotification('You were defeated by the Boss! Regroup and retry!');
         }
       }
     } catch {
@@ -156,6 +158,18 @@ export const BossFight: React.FC = () => {
     } finally {
       setIsExecuting(false);
     }
+  };
+
+  const handleRetryEncounter = () => {
+    setPlayerHealth(100);
+    setBossHealth(BOSS_MAX_HP);
+    setCurrentPhaseIndex(0);
+    setUserCode(phases[0]?.initialCode || '');
+    setIsDefeated(false);
+    setIsVictor(false);
+    setTestResults([]);
+    setExecutionOutput('');
+    triggerNotification('🔄 Boss encounter restarted! Fight bravely!');
   };
 
   const currentPhase = phases[currentPhaseIndex];
@@ -178,9 +192,14 @@ export const BossFight: React.FC = () => {
 
       {/* Top Navigation */}
       <div className="flex-between" style={{ flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-        <button onClick={() => setActiveTab('world')} className="btn-secondary">
-          <ArrowLeft size={16} /> Exit Boss Arena
-        </button>
+        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          <button onClick={() => setActiveTab('world')} className="btn-secondary">
+            <ArrowLeft size={16} /> Exit Boss Arena
+          </button>
+          <button onClick={handleRetryEncounter} className="btn-secondary" title="Restart Boss Encounter">
+            <RotateCcw size={14} /> Restart Fight
+          </button>
+        </div>
         <div style={{
           background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
           padding: 'var(--space-2) var(--space-4)', borderRadius: 'var(--radius-full)', color: 'var(--text-muted)',
@@ -227,7 +246,7 @@ export const BossFight: React.FC = () => {
       </div>
 
       {/* Battle Area */}
-      {!isVictor ? (
+      {!isVictor && !isDefeated ? (
         <div className="grid-responsive" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-5)' }}>
           {/* Phase Objective */}
           <div>
@@ -296,6 +315,25 @@ export const BossFight: React.FC = () => {
             </button>
           </div>
         </div>
+      ) : isDefeated ? (
+        /* DEFEAT SCREEN */
+        <div className="realm-card" style={{ maxWidth: '600px', margin: '0 auto', padding: 'var(--space-8)', textAlign: 'center', border: '1px solid var(--error)' }}>
+          <Skull size={48} color="var(--error)" style={{ marginBottom: 'var(--space-4)' }} />
+          <h1 style={{ fontSize: '24px', color: 'var(--error)', marginBottom: 'var(--space-2)', fontWeight: 700 }}>
+            You Were Defeated
+          </h1>
+          <div style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: 'var(--space-6)' }}>
+            {bossName} overwhelmed your defenses in Phase {currentPhaseIndex + 1}. Study the test cases and strike again!
+          </div>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+            <button onClick={handleRetryEncounter} className="btn-primary" style={{ padding: 'var(--space-3) var(--space-6)' }}>
+              <RotateCcw size={16} /> Retry Boss Fight
+            </button>
+            <button onClick={() => setActiveTab('world')} className="btn-secondary" style={{ padding: 'var(--space-3) var(--space-6)' }}>
+              Return to World Map
+            </button>
+          </div>
+        </div>
       ) : (
         /* VICTORY SCREEN */
         <div className="realm-card" style={{ maxWidth: '600px', margin: '0 auto', padding: 'var(--space-8)', textAlign: 'center', border: '1px solid var(--success)' }}>
@@ -318,9 +356,14 @@ export const BossFight: React.FC = () => {
               </div>
             ))}
           </div>
-          <button onClick={() => setActiveTab('world')} className="btn-primary" style={{ padding: 'var(--space-3) var(--space-6)' }}>
-            Return to World Map
-          </button>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+            <button onClick={handleRetryEncounter} className="btn-secondary" style={{ padding: 'var(--space-3) var(--space-6)' }}>
+              <RotateCcw size={16} /> Replay Battle
+            </button>
+            <button onClick={() => setActiveTab('world')} className="btn-primary" style={{ padding: 'var(--space-3) var(--space-6)' }}>
+              Return to World Map
+            </button>
+          </div>
         </div>
       )}
     </div>

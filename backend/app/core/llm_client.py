@@ -23,8 +23,8 @@ async def call_llm_with_fallback(
         # TIER 1: GOOGLE GEMINI MODELS
         # ─────────────────────────────────────────────
         if settings.AI_API_KEY and len(settings.AI_API_KEY.strip()) > 5:
-            gemini_model = settings.GEMINI_MODEL.strip() if settings.GEMINI_MODEL else "gemini-3.6-flash"
-            gemini_models = [gemini_model]
+            configured_model = settings.GEMINI_MODEL.strip() if settings.GEMINI_MODEL else "gemini-3.5-flash"
+            gemini_models = list(dict.fromkeys([configured_model, "gemini-3.5-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"]))
             payload = {
                 "system_instruction": {"parts": [{"text": system_prompt}]},
                 "contents": [{"parts": [{"text": user_prompt}]}],
@@ -57,7 +57,7 @@ async def call_llm_with_fallback(
 
         if groq_key and len(groq_key.strip()) > 5:
             logger.info("[LLM Fallback] Switching to Groq AI fallback model...")
-            groq_models = ["llama-3.3-70b-versatile", "llama-3.1-70b-versatile", "mixtral-8x7b-32768", "gemma2-9b-it"]
+            groq_models = ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "groq/compound-mini", "openai/gpt-oss-20b"]
             groq_headers = {
                 "Authorization": f"Bearer {groq_key}",
                 "Content-Type": "application/json"
