@@ -62,8 +62,11 @@ export const WorldMap: React.FC = () => {
     }
   };
 
-  const handleNodeClick = (node: MapNode) => {
-    if (!node.unlocked) return;
+  const handleNodeClick = (node: MapNode, isUnlocked: boolean) => {
+    if (!isUnlocked) {
+      soundManager.playLock();
+      return;
+    }
     soundManager.playClick();
     setPopoverNode(node);
   };
@@ -264,12 +267,12 @@ export const WorldMap: React.FC = () => {
             const subLevels = node.subLevels || [];
             const subCompletedCount = subLevels.filter(s => profile.completedNodeIds.includes(s.id)).length;
             const UNLOCK_THRESHOLD = 75;
-            const isCompleted = profile.completedNodeIds.includes(node.id) || (subLevels.length > 0 && subCompletedCount >= UNLOCK_THRESHOLD);
+            const isCompleted = subCompletedCount >= UNLOCK_THRESHOLD;
 
             const prevNode = index > 0 ? activeRealm.nodes[index - 1] : null;
             const prevSubLevels = prevNode?.subLevels || [];
             const prevSubCompletedCount = prevSubLevels.filter(s => profile.completedNodeIds.includes(s.id)).length;
-            const isPrevCompleted = !prevNode || profile.completedNodeIds.includes(prevNode.id) || (prevSubLevels.length > 0 && prevSubCompletedCount >= UNLOCK_THRESHOLD);
+            const isPrevCompleted = !prevNode || prevSubCompletedCount >= UNLOCK_THRESHOLD;
 
             const isUnlocked = index === 0 || isPrevCompleted;
             const isCurrentActive = isUnlocked && !isCompleted;
@@ -277,7 +280,8 @@ export const WorldMap: React.FC = () => {
             return (
               <div
                 key={node.id}
-                onClick={() => handleNodeClick(node)}
+                onClick={() => handleNodeClick(node, isUnlocked)}
+                title={!isUnlocked ? `🔒 Locked — Requires 75+ completed questions in ${prevNode?.title || 'previous level'}` : node.title}
                 style={{
                   position: 'absolute',
                   left: `${node.x}%`,

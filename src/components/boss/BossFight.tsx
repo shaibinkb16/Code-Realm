@@ -59,12 +59,14 @@ export const BossFight: React.FC = () => {
 
       for (let i = 0; i < 3; i++) {
         try {
+          const bossPhaseId = `boss-${activeNode?.id || 'encounter'}-phase-${i + 1}`;
           const params = new URLSearchParams({
-            node_id: activeNode?.id || 'boss-node',
+            node_id: bossPhaseId,
             node_title: `${bossName} — Phase ${i + 1}`,
             realm_name: realmName,
             node_type: 'boss',
-            skill_rating: String(Math.min(2500, (profile.rankRating || 905) + i * 150)),
+            skill_rating: String(Math.min(2500, (profile.rankRating || 905) + (i + 1) * 150)),
+            sub_level_index: '1'
           });
           const resp = await fetch(`${API_BASE}/challenges/generate?${params}`);
           if (!resp.ok) throw new Error();

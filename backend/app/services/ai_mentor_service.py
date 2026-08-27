@@ -169,13 +169,22 @@ class AIMentorService:
             "Return ONLY valid JSON, no markdown fences."
         )
 
+        boss_instructions = ""
+        if node_type == "boss":
+            boss_instructions = f"""
+SPECIAL BOSS BATTLE INSTRUCTIONS:
+- This is a high-stakes RPG Boss Phase combat encounter against "{node_title}".
+- Create dramatic, algorithmic boss battle challenges (e.g. calculating combat damage, armor mitigation, spell combo multipliers, decoding enemy boss incantations, inventory sorting, energy threshold loops).
+- The storyContext must be an epic battle description.
+"""
+
         user_prompt = f"""
 Generate {batch_size} distinct {target_language.capitalize()} coding challenges for:
 - Map Node: "{node_title}"
 - Realm: "{realm_name}"
 - Node Type: "{node_type}"
 - Player Skill Rating: {skill_rating}/2500 → Difficulty: {difficulty}
-
+{boss_instructions}
 Return a JSON array containing exactly {batch_size} objects matching this schema:
 [
   {{
@@ -192,8 +201,8 @@ Return a JSON array containing exactly {batch_size} objects matching this schema
     ],
     "hints": ["hint 1", "hint 2"],
     "explanation": "Concept explanation shown after solving",
-    "xpReward": 150,
-    "coinReward": 75
+    "xpReward": 250,
+    "coinReward": 120
   }}
 ]
 
