@@ -4,6 +4,7 @@ import { api, API_BASE_URL } from '../../services/api';
 import { AITeacherPanel } from './AITeacherPanel';
 import Editor from '@monaco-editor/react';
 import confetti from 'canvas-confetti';
+import { FormattedText } from '../ui/FormattedText';
 import {
   Play,
   CheckCircle,
@@ -15,7 +16,8 @@ import {
   Zap,
   Loader,
   X,
-  MessageSquare
+  MessageSquare,
+  ArrowRight
 } from 'lucide-react';
 
 interface AITestCase {
@@ -80,8 +82,9 @@ export const ChallengeEditor: React.FC = () => {
   const [isLoadingFeedback, setIsLoadingFeedback] = useState(false);
 
   const [isSwapping, setIsSwapping] = useState(false);
+  const [subLevelIdx, setSubLevelIdx] = useState<number>(1);
 
-  const generateChallenge = async (lang: string) => {
+  const generateChallenge = async (lang: string, subIdx: number = subLevelIdx) => {
     setIsLoadingChallenge(true);
     setLoadError(null);
     setCode('');
@@ -102,7 +105,8 @@ export const ChallengeEditor: React.FC = () => {
         realm_name: realmName,
         node_type: nodeType,
         skill_rating: String(profile.rankRating || 905),
-        target_language: lang
+        target_language: lang,
+        sub_level_index: String(subIdx)
       });
 
       const resp = await fetch(`${API_BASE}/challenges/generate?${params}`, {
@@ -121,6 +125,16 @@ export const ChallengeEditor: React.FC = () => {
     } finally {
       setIsLoadingChallenge(false);
     }
+  };
+
+  const handleNextQuestion = () => {
+    const nextIdx = subLevelIdx + 1;
+    setSubLevelIdx(nextIdx);
+    setIsFeedbackOpen(false);
+    setTestResults([]);
+    setHasPassedAll(false);
+    setOutput(`🚀 Advanced to Question ${nextIdx}! Loading challenge scaffold...`);
+    generateChallenge(selectedLanguage, nextIdx);
   };
 
   const handleSwapChallenge = async () => {
@@ -188,9 +202,15 @@ export const ChallengeEditor: React.FC = () => {
 
       const statusLine = result.all_passed
         ? `✅ ALL ${result.test_results.length} TESTS PASSED — ${result.execution_time_ms}ms`
-        : `❌ ${result.test_results.filter(r => r.passed).length}/${result.test_results.length} TESTS PASSED`;
+        : `❌ ${result.test_results.filter(r => r.passed).length}/${result.test_results.length} TESTS PASSED — ${result.execution_time_ms}ms`;
 
-      setOutput(`${statusLine}\n\n${result.output}`);
+      const details = result.test_results && result.test_results.length > 0
+        ? result.test_results.map((tr, i) => 
+            `[Test ${i + 1}] ${tr.description || 'Test'}: ${tr.passed ? 'PASSED ✓' : 'FAILED ✗'}\n  Expected:    ${tr.expected_output}\n  Your Output: ${tr.actual_output !== undefined && tr.actual_output !== '' ? tr.actual_output : '(No output)'}`
+          ).join('\n\n')
+        : (result.output || '');
+
+      setOutput(`${statusLine}\n\n${details}`);
     } catch (err) {
       setOutput('❌ Could not reach the execution backend.');
     } finally {
@@ -258,7 +278,12 @@ export const ChallengeEditor: React.FC = () => {
     }
 
     confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
-    completeChallenge(activeNode?.id || 'node-loop-1', 3, challenge.xpReward, challenge.coinReward);
+    const nodeId = activeNode?.id || 'node-1';
+    const subId = `${nodeId}-sub-${subLevelIdx}`;
+    completeChallenge(subId, 3, challenge.xpReward, challenge.coinReward);
+    if (subLevelIdx >= 75) {
+      completeChallenge(nodeId, 3, 0, 0);
+    }
     fetchAIFeedback();
   };
 
@@ -359,21 +384,33 @@ export const ChallengeEditor: React.FC = () => {
             <div style={{
               background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
               borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', minHeight: '100px',
-              fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6
+              fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6, maxHeight: '300px', overflowY: 'auto'
             }}>
               {isLoadingFeedback
-                ? <div className="flex-center" style={{ gap: 'var(--space-2)' }}><Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> Reviewing...</div>
-                : feedbackText
+                ? <div className="flex-center" style={{ gap: 'var(--space-2)' }}><Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> AI Analyzing Code & Optimization Strategy...</div>
+                : <FormattedText text={feedbackText || 'Great work completing this challenge!'} />
               }
             </div>
 
             <div style={{ display: 'flex', gap: 'var(--space-3)', marginTop: 'var(--space-4)' }}>
-              <button className="btn-primary" style={{ flex: 1 }} onClick={() => {
-                setIsFeedbackOpen(false);
-                if (hasPassedAll) setActiveTab('world');
-              }}>
-                {hasPassedAll ? 'Back to Map' : 'Keep Trying'}
-              </button>
+              {hasPassedAll ? (
+                <>
+                  <button className="btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => {
+                    setIsFeedbackOpen(false);
+                    setActiveTab('world');
+                  }}>
+                    Back to Map
+                  </button>
+                  <button className="btn-primary" style={{ flex: 2, justifyContent: 'center' }} onClick={handleNextQuestion}>
+                    <span>Next Question Q{subLevelIdx + 1}</span>
+                    <ArrowRight size={16} />
+                  </button>
+                </>
+              ) : (
+                <button className="btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setIsFeedbackOpen(false)}>
+                  Keep Trying
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -413,7 +450,7 @@ export const ChallengeEditor: React.FC = () => {
 
           <h3 style={{ fontSize: '13px', fontWeight: 600, marginBottom: 'var(--space-3)' }}>Test Suite</h3>
           {challenge.testCases.map((tc, idx) => {
-            const result = testResults.find(r => r.test_id === tc.id);
+            const result = testResults.find(r => r.test_id === tc.id) || testResults[idx];
             return (
               <div key={tc.id} style={{
                 background: result ? (result.passed ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)') : 'var(--bg-elevated)',
@@ -430,14 +467,36 @@ export const ChallengeEditor: React.FC = () => {
                     <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', background: 'var(--bg-surface)', padding: '6px 8px', borderRadius: '4px', whiteSpace: 'pre-wrap', border: '1px solid var(--border-subtle)' }}>{tc.input}</div>
                   </div>
                 )}
-                <div style={{ marginBottom: result && !result.passed ? '6px' : '0' }}>
+                <div style={{ marginBottom: result ? '6px' : '0' }}>
                   <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px', textTransform: 'uppercase' }}>Expected Output</div>
                   <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-main)', background: 'var(--bg-surface)', padding: '6px 8px', borderRadius: '4px', whiteSpace: 'pre-wrap', border: '1px solid var(--border-subtle)' }}>{tc.expectedOutput}</div>
                 </div>
-                {result && !result.passed && (
+                {result && (
                   <div>
-                    <div style={{ fontSize: '11px', color: 'var(--error)', marginBottom: '2px', textTransform: 'uppercase' }}>Actual Output</div>
-                    <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--error)', background: 'rgba(239,68,68,0.1)', padding: '6px 8px', borderRadius: '4px', whiteSpace: 'pre-wrap', border: '1px solid rgba(239,68,68,0.2)' }}>{result.actual_output || '(Empty)'}</div>
+                    <div style={{ 
+                      fontSize: '11px', 
+                      color: result.passed ? 'var(--success)' : 'var(--error)', 
+                      marginBottom: '2px', 
+                      textTransform: 'uppercase',
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}>
+                      <span>Your Output</span>
+                      <span>{result.passed ? '✓ MATCH' : '✗ MISMATCH'}</span>
+                    </div>
+                    <div style={{ 
+                      fontFamily: 'var(--font-mono)', 
+                      color: result.passed ? 'var(--success)' : 'var(--error)', 
+                      background: result.passed ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.1)', 
+                      padding: '6px 8px', 
+                      borderRadius: '4px', 
+                      whiteSpace: 'pre-wrap', 
+                      border: `1px solid ${result.passed ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.2)'}` 
+                    }}>
+                      {result.actual_output !== undefined && result.actual_output !== '' ? result.actual_output : '(No output / None)'}
+                    </div>
                   </div>
                 )}
               </div>

@@ -241,18 +241,32 @@ export const CodeDuel: React.FC = () => {
             <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.6 }}>{challenge?.description}</p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-              {challenge?.testCases.map((tc) => {
-                const result = testResults.find(r => r.test_id === tc.id);
+              {challenge?.testCases.map((tc, idx) => {
+                const result = testResults.find(r => r.test_id === tc.id) || testResults[idx];
                 return (
                   <div key={tc.id} style={{ background: 'var(--bg-elevated)', border: `1px solid ${result ? (result.passed ? 'var(--success)' : 'var(--error)') : 'var(--border-subtle)'}`, padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', fontSize: '13px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: '4px' }}>
                       {result ? (result.passed ? <CheckCircle size={14} color="var(--success)" /> : <XCircle size={14} color="var(--error)" />) : null}
-                      <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Test Case</span>
+                      <span style={{ color: 'var(--text-main)', fontWeight: 600 }}>{tc.description || 'Test Case'}</span>
                     </div>
-                    <div>
+                    {tc.input && (
+                      <div style={{ marginBottom: '4px' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Input: </span>
+                        <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{tc.input}</span>
+                      </div>
+                    )}
+                    <div style={{ marginBottom: result ? '4px' : '0' }}>
                       <span style={{ color: 'var(--text-muted)' }}>Expected: </span>
                       <span style={{ color: 'var(--text-main)', fontFamily: 'var(--font-mono)' }}>{tc.expectedOutput}</span>
                     </div>
+                    {result && (
+                      <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px dashed var(--border-subtle)' }}>
+                        <span style={{ color: result.passed ? 'var(--success)' : 'var(--error)', fontWeight: 600 }}>Your Output: </span>
+                        <span style={{ color: result.passed ? 'var(--success)' : 'var(--error)', fontFamily: 'var(--font-mono)' }}>
+                          {result.actual_output !== undefined && result.actual_output !== '' ? result.actual_output : '(No output)'}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 );
               })}

@@ -263,12 +263,13 @@ export const WorldMap: React.FC = () => {
           {activeRealm.nodes.map((node, index) => {
             const subLevels = node.subLevels || [];
             const subCompletedCount = subLevels.filter(s => profile.completedNodeIds.includes(s.id)).length;
-            const isCompleted = profile.completedNodeIds.includes(node.id) || (subLevels.length > 0 && subCompletedCount >= subLevels.length);
+            const UNLOCK_THRESHOLD = 75;
+            const isCompleted = profile.completedNodeIds.includes(node.id) || (subLevels.length > 0 && subCompletedCount >= UNLOCK_THRESHOLD);
 
             const prevNode = index > 0 ? activeRealm.nodes[index - 1] : null;
             const prevSubLevels = prevNode?.subLevels || [];
             const prevSubCompletedCount = prevSubLevels.filter(s => profile.completedNodeIds.includes(s.id)).length;
-            const isPrevCompleted = !prevNode || profile.completedNodeIds.includes(prevNode.id) || (prevSubLevels.length > 0 && prevSubCompletedCount >= prevSubLevels.length);
+            const isPrevCompleted = !prevNode || profile.completedNodeIds.includes(prevNode.id) || (prevSubLevels.length > 0 && prevSubCompletedCount >= UNLOCK_THRESHOLD);
 
             const isUnlocked = index === 0 || isPrevCompleted;
             const isCurrentActive = isUnlocked && !isCompleted;
@@ -389,7 +390,7 @@ export const WorldMap: React.FC = () => {
         <NodeDetailModal
           node={popoverNode}
           onClose={() => setPopoverNode(null)}
-          onLaunch={() => handleStartNode(popoverNode)}
+          onLaunch={(subIdx) => handleStartNode(popoverNode, subIdx)}
         />
       )}
     </div>

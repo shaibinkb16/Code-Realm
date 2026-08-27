@@ -127,7 +127,6 @@ async def submit_code_solution(
             )
             db.add(submission_record)
 
-        # Update Rating, League, and User Profile Stats
         if current_user.profile:
             current_user.profile.rank_rating = new_rating
             current_user.profile.rank = game_service.get_league_from_rating(new_rating)
@@ -141,6 +140,17 @@ async def submit_code_solution(
                 current_user.profile.stars += stars_earned
                 current_user.profile.level = (current_user.profile.xp // 1000) + 1
                 current_user.profile.next_level_xp = current_user.profile.level * 1000
+
+                if req.challenge_id:
+                    c_ids = list(current_user.profile.completed_node_ids or [])
+                    if req.challenge_id not in c_ids:
+                        c_ids.append(req.challenge_id)
+                        current_user.profile.completed_node_ids = c_ids
+                    
+                    n_stars = dict(current_user.profile.node_stars or {})
+                    existing_s = n_stars.get(req.challenge_id, 0)
+                    n_stars[req.challenge_id] = max(existing_s, stars_earned)
+                    current_user.profile.node_stars = n_stars
         
         # Save History
         history = RatingHistory(

@@ -243,9 +243,20 @@ export const BossFight: React.FC = () => {
             {testResults.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                 {testResults.map(r => (
-                  <div key={r.test_id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: '13px' }}>
-                    {r.passed ? <CheckCircle size={14} color="var(--success)" /> : <XCircle size={14} color="var(--error)" />}
-                    <span style={{ color: r.passed ? 'var(--success)' : 'var(--error)' }}>{r.description}</span>
+                  <div key={r.test_id} style={{ 
+                    background: r.passed ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.1)',
+                    border: `1px solid ${r.passed ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.2)'}`,
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: '13px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: '4px' }}>
+                      {r.passed ? <CheckCircle size={14} color="var(--success)" /> : <XCircle size={14} color="var(--error)" />}
+                      <span style={{ fontWeight: 600, color: r.passed ? 'var(--success)' : 'var(--error)' }}>{r.description || 'Test Case'}</span>
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                      Expected: <span style={{ color: 'var(--text-main)' }}>{r.expected_output}</span> | Your Output: <span style={{ color: r.passed ? 'var(--success)' : 'var(--error)', fontWeight: 600 }}>{r.actual_output !== undefined && r.actual_output !== '' ? r.actual_output : '(No output)'}</span>
+                    </div>
                   </div>
                 ))}
               </div>

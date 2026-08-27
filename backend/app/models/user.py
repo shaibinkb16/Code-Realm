@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, Enum
+from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, Enum, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy import Uuid as UUID
 from app.core.database import Base
@@ -60,6 +60,8 @@ class UserProfile(Base):
     pet_stage = Column(String(30), default="Baby", nullable=False)
     pet_level = Column(Integer, default=1, nullable=False)
     hq_level = Column(String(50), default="Room", nullable=False)
+    completed_node_ids = Column(JSON, default=list, nullable=False)
+    node_stars = Column(JSON, default=dict, nullable=False)
 
     user = relationship("User", back_populates="profile")
 

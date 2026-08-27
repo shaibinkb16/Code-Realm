@@ -15,7 +15,7 @@ import {
 interface Props {
   node: MapNode;
   onClose: () => void;
-  onLaunch: () => void;
+  onLaunch: (questionIdx?: number) => void;
 }
 
 export const NodeDetailModal: React.FC<Props> = ({ node, onClose, onLaunch }) => {
@@ -74,6 +74,28 @@ export const NodeDetailModal: React.FC<Props> = ({ node, onClose, onLaunch }) =>
 
         {/* Content Body */}
         <div style={{ padding: 'var(--space-5)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+          {completedCount >= 75 && (
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(217, 160, 54, 0.2), rgba(52, 211, 153, 0.2))',
+              border: '1px solid var(--accent-gold)',
+              borderRadius: 'var(--radius-md)',
+              padding: '12px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              justify: 'space-between'
+            }}>
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--accent-gold)' }}>
+                  🎉 NEXT MAP WAYPOINT UNLOCKED!
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-main)', marginTop: '2px' }}>
+                  You cleared {completedCount}/100 questions — meeting the 75+ questions threshold to advance!
+                </div>
+              </div>
+              <span style={{ fontSize: '24px' }}>🎊</span>
+            </div>
+          )}
+
           {/* Progress Bar & Rating */}
           <div style={{ background: 'var(--bg-elevated)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
             <div className="flex-between" style={{ marginBottom: '8px' }}>
@@ -155,7 +177,7 @@ export const NodeDetailModal: React.FC<Props> = ({ node, onClose, onLaunch }) =>
                   </div>
 
                   {isUnlocked ? (
-                    <button onClick={onLaunch} className="btn-primary" style={{ padding: '5px 12px', fontSize: '12px' }}>
+                    <button onClick={() => onLaunch(globalIdx + 1)} className="btn-primary" style={{ padding: '5px 12px', fontSize: '12px' }}>
                       <span>Play Question</span><ChevronRight size={14} />
                     </button>
                   ) : (

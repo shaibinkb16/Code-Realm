@@ -76,8 +76,8 @@ const buildProfileFromUser = (user: any, existingSavedProfile?: Partial<PlayerPr
         banner: 'Season 01 Explorer'
       }
     },
-    completedNodeIds: existingSavedProfile?.completedNodeIds || [],
-    nodeStars: existingSavedProfile?.nodeStars || {},
+    completedNodeIds: p.completed_node_ids || existingSavedProfile?.completedNodeIds || [],
+    nodeStars: p.node_stars || existingSavedProfile?.nodeStars || {},
     unlockedAchievements: existingSavedProfile?.unlockedAchievements || ['first-blood'],
     guildName: existingSavedProfile?.guildName || 'CODE REALM EXPLORERS',
     seasonBadge: existingSavedProfile?.seasonBadge || 'SEASON 01 — PYTHON AGE'
@@ -145,6 +145,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const completeChallenge = (nodeId: string, stars: number, xp: number, coins: number) => {
+    // Persist progress to backend PostgreSQL database
+    api.saveUserProgress(nodeId, stars, xp, coins).catch(err => {
+      console.warn('Failed to persist progress to database:', err);
+    });
+
     setProfile(prev => {
       const newXp = prev.xp + xp;
       let newLevel = prev.level;

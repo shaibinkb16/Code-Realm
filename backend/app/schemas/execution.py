@@ -2,10 +2,10 @@ from pydantic import BaseModel
 from typing import List, Optional, Any, Dict
 
 class TestCaseInput(BaseModel):
-    id: str
-    description: str
+    id: Optional[str] = ""
+    description: Optional[str] = ""
     input: Optional[str] = ""
-    expected_output: str
+    expected_output: Optional[str] = ""
 
 class CodeExecutionRequest(BaseModel):
     challenge_id: Optional[str] = None

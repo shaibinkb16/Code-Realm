@@ -273,6 +273,18 @@ class ApiClient {
     return await res.json();
   }
 
+  async saveUserProgress(nodeId: string, stars: number = 3, xp: number = 100, coins: number = 50) {
+    const res = await this.fetchWithAuth(`${API_BASE_URL}/user/progress`, {
+      method: 'POST',
+      body: JSON.stringify({ node_id: nodeId, stars, xp, coins })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to save user progress');
+    }
+    return await res.json();
+  }
+
   async upgradeHq() {
     const res = await this.fetchWithAuth(`${API_BASE_URL}/user/hq/upgrade`, { method: 'POST' });
     if (!res.ok) {

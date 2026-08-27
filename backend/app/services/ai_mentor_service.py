@@ -182,9 +182,9 @@ Return a JSON array containing exactly {batch_size} objects matching this schema
     "title": "Short dramatic challenge title",
     "type": "puzzle",
     "difficulty": "{difficulty}",
-    "description": "Clear task description",
+    "description": "Clear task description (what function or logic the user must write)",
     "storyContext": "1-2 sentence immersive RPG flavor text",
-    "initialCode": "Starter {target_language.capitalize()} code scaffold with comments",
+    "initialCode": "Unsolved {target_language.capitalize()} starter template (e.g. def solve(n):\\n    # Write your solution here\\n    pass)",
     "language": "{target_language.lower()}",
     "testCases": [
       {{ "id": "t1", "input": "5", "expectedOutput": "15", "description": "verifies sum of 5" }},
@@ -196,6 +196,11 @@ Return a JSON array containing exactly {batch_size} objects matching this schema
     "coinReward": 75
   }}
 ]
+
+CRITICAL RULES:
+1. DO NOT solve the problem in "initialCode".
+2. "initialCode" MUST ONLY be an unsolved starter skeleton with comments and 'pass' / '// TODO: implement'. The player must write the code themselves!
+3. Minimum 2 test cases per challenge.
 """
         fallback_stubs = {
             "python": "def solve(n):\n    # Your code here\n    pass\n\nprint(solve(5))",

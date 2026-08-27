@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 import os
 import json
+import re
 from typing import Dict, Any, List
 
 from app.schemas.execution import ExecutionResponse, TestResultResponse
@@ -15,24 +16,62 @@ import uuid
 
 class ExecutionService:
     @staticmethod
+    def _clean_ts_cpp_java_code(user_code: str, lang: str) -> str:
+        """
+        Transpiles/cleans TypeScript, C++, Java, C# code into executable JS for the Node runner
+        when native compilers are not present.
+        """
+        clean = user_code
+        if lang in ["typescript", "ts"]:
+            clean = re.sub(r':\s*[A-Za-z0-9_<>\[\]]+', '', clean)
+            clean = re.sub(r'as\s+[A-Za-z0-9_<>\[\]]+', '', clean)
+            clean = re.sub(r'interface\s+\w+\s*\{[^}]*\}', '', clean)
+            clean = re.sub(r'type\s+\w+\s*=\s*[^;]+;', '', clean)
+        elif lang in ["cpp", "c++", "c", "java", "cs", "csharp"]:
+            clean = re.sub(r'public\s+class\s+\w+\s*\{', '', clean)
+            clean = re.sub(r'using\s+namespace\s+std;', '', clean)
+            clean = re.sub(r'#include\s+<[^>]+>', '', clean)
+            clean = re.sub(r'(?:public|private|protected|static|\s)*\b(?:int|double|float|long|short|void|bool|boolean|String|auto)\b\s+([A-Za-z0-9_]+)\s*\(([^)]*)\)', r'function \1(\2)', clean)
+            clean = re.sub(r'\b(?:int|double|float|long|short|bool|boolean|String|auto)\b\s+', '', clean)
+            clean = re.sub(r'std::cout\s*<<\s*([^;]+);', r'console.log(\1);', clean)
+            clean = re.sub(r'System\.out\.println\s*\(([^)]+)\);', r'console.log(\1);', clean)
+            clean = re.sub(r'Console\.WriteLine\s*\(([^)]+)\);', r'console.log(\1);', clean)
+        return clean
+
+    @staticmethod
     async def _execute_python_locally(user_code: str, test_cases: List[Dict[str, Any]]) -> Dict[str, Any]:
         start_time = time.time()
         
-        # Escape user code properly for string interpolation by escaping single triple-quotes
-        escaped_user_code = user_code.replace("'''", "\\'\\'\\'")
+        user_code_json = json.dumps(user_code)
+        test_cases_json = json.dumps(test_cases)
         
-        runner_code = f"""
-import sys
+        runner_code = f"""import sys
 import io
 import ast
 
-user_code = '''{escaped_user_code}'''
-test_cases = {test_cases}
+user_code = {user_code_json}
+test_cases = {test_cases_json}
 
 print('===RESULTS_START===')
+
+namespace = {{}}
+top_level_error = None
+try:
+    old_stdout = sys.stdout
+    sys.stdout = io.StringIO()
+    exec(user_code, namespace)
+    sys.stdout = old_stdout
+except Exception as e:
+    top_level_error = str(e)
+    sys.stdout = old_stdout
+
 for i, tc in enumerate(test_cases):
     print(f'---TC_{{i}}---')
-    
+    if top_level_error:
+        print(f'RUNTIME_ERROR: {{top_level_error}}')
+        print(f'---ERR_{{i}}---')
+        continue
+
     old_stdout = sys.stdout
     sys.stdout = io.StringIO()
     
@@ -41,33 +80,33 @@ for i, tc in enumerate(test_cases):
     sys.stdin = io.StringIO(raw_in)
     
     try:
-        namespace = {{}}
-        exec(user_code, namespace)
+        user_fns = [v for k, v in namespace.items() if callable(v) and not k.startswith('__')]
+        res = None
+        called = False
+        if user_fns:
+            fn = user_fns[-1]
+            if not raw_in:
+                res = fn()
+                called = True
+            else:
+                try:
+                    parsed = ast.literal_eval(f'({{raw_in}},)')
+                    if isinstance(parsed, tuple) and len(parsed) == 1 and isinstance(parsed[0], tuple):
+                        parsed = parsed[0]
+                    res = fn(*parsed) if isinstance(parsed, tuple) else fn(parsed)
+                except Exception:
+                    res = fn(raw_in)
+                called = True
         
-        out = sys.stdout.getvalue()
-        if not out.strip() or out.strip() == 'None':
-            # Clear top-level 'None' print output if unreturned function printed None
+        if called and res is not None:
             sys.stdout = io.StringIO()
-            user_fns = [v for k, v in namespace.items() if callable(v) and not k.startswith('__')]
-            if user_fns:
-                fn = user_fns[-1]
-                if not raw_in:
-                    res = fn()
-                else:
-                    try:
-                        parsed = ast.literal_eval(f'({{raw_in}},)')
-                        if isinstance(parsed, tuple) and len(parsed) == 1 and isinstance(parsed[0], tuple):
-                            parsed = parsed[0]
-                        res = fn(*parsed) if isinstance(parsed, tuple) else fn(parsed)
-                    except Exception:
-                        res = fn(raw_in)
-                if res is not None:
-                    print(res)
+            print(res)
+        elif not called:
+            exec(user_code, namespace)
     except Exception as e:
         print(f'RUNTIME_ERROR: {{e}}')
         
     output = sys.stdout.getvalue()
-    
     sys.stdout = old_stdout
     sys.stdin = old_stdin
     
@@ -75,29 +114,39 @@ for i, tc in enumerate(test_cases):
     print(f'---ERR_{{i}}---')
 """
 
+        def _run_py_process(code_str: str):
+            temp_path = None
+            try:
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, encoding='utf-8') as f:
+                    f.write(code_str)
+                    temp_path = f.name
+                
+                proc = subprocess.run(
+                    [sys.executable, temp_path],
+                    capture_output=True,
+                    text=True,
+                    timeout=4.0
+                )
+                return proc.stdout, proc.stderr, False
+            except subprocess.TimeoutExpired:
+                return "", "Execution Timeout", True
+            except Exception as ex:
+                return "", str(ex), False
+            finally:
+                if temp_path and os.path.exists(temp_path):
+                    try:
+                        os.remove(temp_path)
+                    except Exception:
+                        pass
 
         try:
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
-                f.write(runner_code)
-                temp_path = f.name
-            
-            proc = await asyncio.create_subprocess_exec(
-                "python", temp_path,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            
-            try:
-                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=3.0)
-                logs = stdout.decode('utf-8')
-            except asyncio.TimeoutError:
-                proc.kill()
+            logs, err_logs, is_timeout = await asyncio.to_thread(_run_py_process, runner_code)
+            if is_timeout:
                 return {"status": "TIMEOUT", "output": "Execution Timeout", "test_results": []}
-            finally:
-                os.remove(temp_path)
-                
+
             if "===RESULTS_START===" not in logs:
-                return {"status": "RUNTIME_ERROR", "output": logs, "test_results": []}
+                err_msg = err_logs if err_logs else logs
+                return {"status": "RUNTIME_ERROR", "output": err_msg or "Runtime error during execution.", "test_results": []}
                 
             results_section = logs.split("===RESULTS_START===")[1]
             test_results = []
@@ -107,10 +156,7 @@ for i, tc in enumerate(test_cases):
                 exp_val = tc.get("expected_output")
                 if exp_val is None:
                     exp_val = tc.get("expectedOutput")
-                if exp_val is None:
-                    expected = ""
-                else:
-                    expected = str(exp_val).strip().replace('\r\n', '\n')
+                expected = "" if exp_val is None else str(exp_val).strip().replace('\r\n', '\n')
                     
                 marker_out = f"---TC_{i}---"
                 marker_err = f"---ERR_{i}---"
@@ -146,15 +192,29 @@ for i, tc in enumerate(test_cases):
             return {"status": "RUNTIME_ERROR", "output": str(e), "test_results": []}
 
     @staticmethod
-    async def _execute_js_locally(user_code: str, test_cases: List[Dict[str, Any]]) -> Dict[str, Any]:
-
+    async def _execute_js_locally(user_code: str, test_cases: List[Dict[str, Any]], lang: str = "javascript") -> Dict[str, Any]:
         start_time = time.time()
-        escaped_user_code = user_code.replace("`", "\\`").replace("${", "\\${")
+        clean_code = ExecutionService._clean_ts_cpp_java_code(user_code, lang)
+        
+        user_code_json = json.dumps(clean_code)
         test_cases_json = json.dumps(test_cases)
 
         runner_js = f"""
 const testCases = {test_cases_json};
-const userCode = `{escaped_user_code}`;
+const userCode = {user_code_json};
+
+function parseInput(raw) {{
+    if (raw === undefined || raw === null) return raw;
+    if (typeof raw !== 'string') return raw;
+    const trimmed = raw.trim();
+    if (trimmed === '') return '';
+    try {{
+        return JSON.parse(trimmed);
+    }} catch (e) {{
+        if (!isNaN(trimmed)) return Number(trimmed);
+        return trimmed;
+    }}
+}}
 
 console.log("===RESULTS_START===");
 
@@ -168,8 +228,9 @@ testCases.forEach((tc, i) => {{
 
     try {{
         const fn = new Function("input", `${{userCode}}\\nif (typeof solve === 'function') return solve(input);`);
-        let res = fn(tc.input);
-        if (res !== undefined && res !== null && !output.trim()) {{
+        const inputVal = parseInput(tc.input);
+        let res = fn(inputVal);
+        if (res !== undefined && res !== null) {{
             output = String(res);
         }}
     }} catch (err) {{
@@ -181,28 +242,39 @@ testCases.forEach((tc, i) => {{
     console.log(`---ERR_${{i}}---`);
 }});
 """
-        try:
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False) as f:
-                f.write(runner_js)
-                temp_path = f.name
-
-            proc = await asyncio.create_subprocess_exec(
-                "node", temp_path,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-
+        def _run_js_process(code_str: str):
+            temp_path = None
             try:
-                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=3.0)
-                logs = stdout.decode('utf-8')
-            except asyncio.TimeoutError:
-                proc.kill()
-                return {"status": "TIMEOUT", "output": "Execution Timeout", "test_results": []}
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False, encoding='utf-8') as f:
+                    f.write(code_str)
+                    temp_path = f.name
+                
+                proc = subprocess.run(
+                    ["node", temp_path],
+                    capture_output=True,
+                    text=True,
+                    timeout=4.0
+                )
+                return proc.stdout, proc.stderr, False
+            except subprocess.TimeoutExpired:
+                return "", "Execution Timeout", True
+            except Exception as ex:
+                return "", str(ex), False
             finally:
-                os.remove(temp_path)
+                if temp_path and os.path.exists(temp_path):
+                    try:
+                        os.remove(temp_path)
+                    except Exception:
+                        pass
+
+        try:
+            logs, err_logs, is_timeout = await asyncio.to_thread(_run_js_process, runner_js)
+            if is_timeout:
+                return {"status": "TIMEOUT", "output": "Execution Timeout", "test_results": []}
 
             if "===RESULTS_START===" not in logs:
-                return {"status": "RUNTIME_ERROR", "output": logs, "test_results": []}
+                err_msg = err_logs if err_logs else logs
+                return {"status": "RUNTIME_ERROR", "output": err_msg or "Runtime error in JS sandbox execution.", "test_results": []}
 
             results_section = logs.split("===RESULTS_START===")[1]
             test_results = []
@@ -264,8 +336,8 @@ testCases.forEach((tc, i) => {{
                 )
 
         lang = (language or "python").lower()
-        if lang in ["javascript", "js", "typescript", "ts"]:
-            result = await ExecutionService._execute_js_locally(user_code, test_cases)
+        if lang in ["javascript", "js", "typescript", "ts", "cpp", "c++", "c", "java", "cs", "csharp"]:
+            result = await ExecutionService._execute_js_locally(user_code, test_cases, lang)
         else:
             result = await ExecutionService._execute_python_locally(user_code, test_cases)
 
@@ -304,3 +376,4 @@ testCases.forEach((tc, i) => {{
 
 
 execution_service = ExecutionService()
+

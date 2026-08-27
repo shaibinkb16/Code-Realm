@@ -36,6 +36,15 @@ def update_user_streak(profile: UserProfile):
         profile.streak = 1
         profile.last_activity_date = now
 
+from pydantic import BaseModel
+
+class SaveProgressRequest(BaseModel):
+    node_id: str
+    stars: int = 3
+    xp: int = 100
+    coins: int = 50
+
+
 @router.get("/profile")
 async def get_user_profile(
     current_user: User = Depends(get_current_user),
@@ -46,6 +55,48 @@ async def get_user_profile(
         update_user_streak(current_user.profile)
         await db.commit()
     return current_user
+
+
+@router.post("/progress")
+async def save_user_progress(
+    req: SaveProgressRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Saves completed node ID, stars, XP, and coins directly to PostgreSQL database.
+    Ensures player progression is permanently preserved across devices & logins.
+    """
+    profile = current_user.profile
+    if not profile:
+        raise HTTPException(status_code=400, detail="Profile not found")
+
+    c_ids = list(profile.completed_node_ids or [])
+    if req.node_id not in c_ids:
+        c_ids.append(req.node_id)
+        profile.completed_node_ids = c_ids
+
+    n_stars = dict(profile.node_stars or {})
+    existing = n_stars.get(req.node_id, 0)
+    n_stars[req.node_id] = max(existing, req.stars)
+    profile.node_stars = n_stars
+
+    profile.xp += req.xp
+    profile.coins += req.coins
+    profile.stars += max(0, req.stars - existing)
+    profile.level = (profile.xp // 1000) + 1
+    profile.next_level_xp = profile.level * 1000
+
+    await db.commit()
+
+    return {
+        "status": "SUCCESS",
+        "completed_node_ids": profile.completed_node_ids,
+        "node_stars": profile.node_stars,
+        "xp": profile.xp,
+        "level": profile.level,
+        "coins": profile.coins
+    }
 
 @router.post("/hq/upgrade")
 async def upgrade_hq(
