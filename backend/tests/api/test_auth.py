@@ -81,12 +81,8 @@ async def test_otp_verify_and_login(client: AsyncClient, mock_redis):
         }
     )
     
-    # Extract the generated OTP from mock_redis (we mocked setex)
-    # the store dict is in mock_redis fixture closure, but we can intercept the call
-    args, kwargs = mock_redis.redis_client.setex.call_args
-    key = args[0] # "otp:otp@example.com"
-    ttl = args[1] # 300
-    otp_code = args[2]
+    # Extract the generated OTP from mock_redis
+    otp_code = await mock_redis.get("otp:otp@example.com")
     
     # Verify OTP
     response = await client.post(

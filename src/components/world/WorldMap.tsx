@@ -20,7 +20,7 @@ import {
 } from 'react-icons/gi';
 
 export const WorldMap: React.FC = () => {
-  const { profile, setActiveNode, setActiveTab } = useGame();
+  const { profile, setActiveNode, setActiveTab, setActiveSubLevelIdx } = useGame();
   const [selectedRealmId, setSelectedRealmId] = useState<string>('starter-village');
   const [popoverNode, setPopoverNode] = useState<MapNode | null>(null);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(soundManager.enabled);
@@ -71,9 +71,17 @@ export const WorldMap: React.FC = () => {
     setPopoverNode(node);
   };
 
-  const handleStartNode = (node: MapNode, _subIdx?: number) => {
+  const handleStartNode = (node: MapNode, subIdx?: number) => {
     soundManager.playSuccess();
     setActiveNode(node);
+    if (subIdx) {
+      setActiveSubLevelIdx(subIdx);
+    } else {
+      // Find the first uncompleted question (1-indexed)
+      const subLevels = node.subLevels || [];
+      const firstUncompletedIdx = subLevels.findIndex(s => !profile.completedNodeIds.includes(s.id));
+      setActiveSubLevelIdx(firstUncompletedIdx >= 0 ? firstUncompletedIdx + 1 : 1);
+    }
     setPopoverNode(null);
     if (node.type === 'boss') {
       setActiveTab('boss');

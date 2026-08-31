@@ -6,6 +6,7 @@ import { SocialAuthButtons } from './SocialAuthButtons';
 import { EmailLoginForm } from './EmailLoginForm';
 import { OnboardingFlow } from './OnboardingFlow';
 import { SessionManager } from './SessionManager';
+import { LegalModal, type LegalModalType } from '../legal/LegalModal';
 import { TrendingUp, Target, Users, Lock, ArrowLeft } from 'lucide-react';
 import './AuthView.css';
 
@@ -16,6 +17,7 @@ export const AuthLayout: React.FC = () => {
   const { success, error: showError } = useToast();
 
   const [viewMode, setViewMode] = useState<AuthViewMode>('login');
+  const [legalModalType, setLegalModalType] = useState<LegalModalType>(null);
   const [formData, setFormData] = useState({ username: '', email: '', password: '' });
   const [otpCode, setOtpCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -296,12 +298,38 @@ export const AuthLayout: React.FC = () => {
           <div>© 2026 Code Realm. All rights reserved.</div>
 
           <div className="cr-footer-links">
-            <a href="#privacy" className="cr-footer-link">Privacy</a>
-            <a href="#terms" className="cr-footer-link">Terms</a>
-            <a href="#help" className="cr-footer-link">Help</a>
+            <button
+              type="button"
+              onClick={() => setLegalModalType('privacy')}
+              className="cr-footer-link"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+            >
+              Privacy
+            </button>
+            <button
+              type="button"
+              onClick={() => setLegalModalType('terms')}
+              className="cr-footer-link"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+            >
+              Terms
+            </button>
+            <button
+              type="button"
+              onClick={() => setLegalModalType('help')}
+              className="cr-footer-link"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+            >
+              Help
+            </button>
           </div>
         </footer>
       </div>
+
+      <LegalModal
+        type={legalModalType}
+        onClose={() => setLegalModalType(null)}
+      />
     </div>
   );
 };

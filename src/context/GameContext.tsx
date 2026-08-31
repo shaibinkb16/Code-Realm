@@ -12,6 +12,8 @@ interface GameContextType {
   setActiveTab: (tab: ActiveTab) => void;
   activeNode: MapNode | null;
   setActiveNode: (node: MapNode | null) => void;
+  activeSubLevelIdx: number | null;
+  setActiveSubLevelIdx: (idx: number | null) => void;
   isAiModalOpen: boolean;
   setIsAiModalOpen: (open: boolean) => void;
   aiChatMessages: { sender: 'ai' | 'user'; text: string; time: string }[];
@@ -34,6 +36,14 @@ const buildProfileFromUser = (user: any, existingSavedProfile?: Partial<PlayerPr
   const email = user?.email || '';
 
   const rankRating = p.rank_rating ?? existingSavedProfile?.rankRating ?? 500;
+
+  const backendCompleted: string[] = Array.isArray(p.completed_node_ids) ? p.completed_node_ids : [];
+  const localCompleted: string[] = Array.isArray(existingSavedProfile?.completedNodeIds) ? existingSavedProfile.completedNodeIds : [];
+  const mergedCompleted = Array.from(new Set([...backendCompleted, ...localCompleted]));
+
+  const backendStars = (p.node_stars && typeof p.node_stars === 'object') ? p.node_stars : {};
+  const localStars = (existingSavedProfile?.nodeStars && typeof existingSavedProfile.nodeStars === 'object') ? existingSavedProfile.nodeStars : {};
+  const mergedStars = { ...localStars, ...backendStars };
 
   return {
     username: username,
@@ -76,8 +86,8 @@ const buildProfileFromUser = (user: any, existingSavedProfile?: Partial<PlayerPr
         banner: 'Season 01 Explorer'
       }
     },
-    completedNodeIds: p.completed_node_ids || existingSavedProfile?.completedNodeIds || [],
-    nodeStars: p.node_stars || existingSavedProfile?.nodeStars || {},
+    completedNodeIds: mergedCompleted,
+    nodeStars: mergedStars,
     unlockedAchievements: existingSavedProfile?.unlockedAchievements || ['first-blood'],
     guildName: existingSavedProfile?.guildName || 'CODE REALM EXPLORERS',
     seasonBadge: existingSavedProfile?.seasonBadge || 'SEASON 01 — PYTHON AGE'
@@ -100,6 +110,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('world');
   const [activeNode, setActiveNode] = useState<MapNode | null>(realmsData[0]?.nodes[0] || null);
+  const [activeSubLevelIdx, setActiveSubLevelIdx] = useState<number | null>(null);
   const [isAiModalOpen, setIsAiModalOpen] = useState<boolean>(false);
   const [notification, setNotification] = useState<string | null>(null);
 
@@ -251,6 +262,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setActiveTab,
         activeNode,
         setActiveNode,
+        activeSubLevelIdx,
+        setActiveSubLevelIdx,
         isAiModalOpen,
         setIsAiModalOpen,
         aiChatMessages,

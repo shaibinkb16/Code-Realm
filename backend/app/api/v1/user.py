@@ -57,6 +57,8 @@ async def get_user_profile(
     return current_user
 
 
+from sqlalchemy.orm.attributes import flag_modified
+
 @router.post("/progress")
 async def save_user_progress(
     req: SaveProgressRequest,
@@ -86,6 +88,9 @@ async def save_user_progress(
     profile.stars += max(0, req.stars - existing)
     profile.level = (profile.xp // 1000) + 1
     profile.next_level_xp = profile.level * 1000
+
+    flag_modified(profile, "completed_node_ids")
+    flag_modified(profile, "node_stars")
 
     await db.commit()
 
@@ -188,6 +193,14 @@ async def claim_passive_income(
     }
     amount = passive_rates.get(profile.hq_level, 0)
     profile.coins += amount
+    await db.commit()
+
+    return {
+        "message": f"Claimed +{amount} daily passive coins!",
+        "coins": profile.coins,
+        "amount": amount
+    }
+
 from pydantic import BaseModel, Field
 from typing import Optional
 from app.models.feedback import UserFeedback

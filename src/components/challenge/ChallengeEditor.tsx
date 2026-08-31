@@ -64,7 +64,7 @@ interface ExecutionResult {
 const API_BASE = API_BASE_URL;
 
 export const ChallengeEditor: React.FC = () => {
-  const { activeNode, setActiveTab, completeChallenge, profile, setProfile, theme } = useGame();
+  const { activeNode, setActiveTab, completeChallenge, profile, setProfile, theme, activeSubLevelIdx, setActiveSubLevelIdx } = useGame();
 
   const [challenge, setChallenge] = useState<AIChallenge | null>(null);
   const [isLoadingChallenge, setIsLoadingChallenge] = useState(true);
@@ -82,7 +82,15 @@ export const ChallengeEditor: React.FC = () => {
   const [isLoadingFeedback, setIsLoadingFeedback] = useState(false);
 
   const [isSwapping, setIsSwapping] = useState(false);
-  const [subLevelIdx, setSubLevelIdx] = useState<number>(1);
+  const [subLevelIdx, setSubLevelIdx] = useState<number>(() => {
+    if (activeSubLevelIdx) return activeSubLevelIdx;
+    if (activeNode) {
+      const subLevels = activeNode.subLevels || [];
+      const firstUncompleted = subLevels.findIndex(s => !profile.completedNodeIds.includes(s.id));
+      return firstUncompleted >= 0 ? firstUncompleted + 1 : 1;
+    }
+    return 1;
+  });
 
   const generateChallenge = async (lang: string, subIdx: number = subLevelIdx) => {
     setIsLoadingChallenge(true);
@@ -130,6 +138,7 @@ export const ChallengeEditor: React.FC = () => {
   const handleNextQuestion = () => {
     const nextIdx = subLevelIdx + 1;
     setSubLevelIdx(nextIdx);
+    if (setActiveSubLevelIdx) setActiveSubLevelIdx(nextIdx);
     setIsFeedbackOpen(false);
     setTestResults([]);
     setHasPassedAll(false);
@@ -169,8 +178,16 @@ export const ChallengeEditor: React.FC = () => {
   };
 
   useEffect(() => {
-    generateChallenge(selectedLanguage);
-  }, [activeNode?.id]);
+    let targetIdx = activeSubLevelIdx;
+    if (!targetIdx && activeNode) {
+      const subLevels = activeNode.subLevels || [];
+      const firstUncompleted = subLevels.findIndex(s => !profile.completedNodeIds.includes(s.id));
+      targetIdx = firstUncompleted >= 0 ? firstUncompleted + 1 : 1;
+    }
+    const finalIdx = targetIdx || 1;
+    setSubLevelIdx(finalIdx);
+    generateChallenge(selectedLanguage, finalIdx);
+  }, [activeNode?.id, activeSubLevelIdx]);
 
   const handleRunCode = async () => {
     if (!challenge) return;
@@ -231,6 +248,10 @@ export const ChallengeEditor: React.FC = () => {
       return;
     }
 
+    const nodeId = activeNode?.id || 'node-1';
+    const subId = `${nodeId}-sub-${subLevelIdx}`;
+    const challengeId = (challenge as any)?.id || subId;
+
     try {
       const token = localStorage.getItem('coderealm_token');
       if (token) {
@@ -241,7 +262,7 @@ export const ChallengeEditor: React.FC = () => {
             'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({
-            challenge_id: activeNode?.id || challenge.title.toLowerCase().replace(/\s+/g, '-'),
+            challenge_id: challengeId,
             code,
             language: selectedLanguage,
             test_cases: challenge.testCases.map(tc => ({
@@ -268,7 +289,9 @@ export const ChallengeEditor: React.FC = () => {
               rank: p.rank,
               rankRating: p.rank_rating,
               hq: { ...prev.hq, levelName: p.hq_level },
-              pet: { ...prev.pet, stage: p.pet_stage, level: p.pet_level }
+              pet: { ...prev.pet, stage: p.pet_stage, level: p.pet_level },
+              completedNodeIds: Array.isArray(p.completed_node_ids) ? p.completed_node_ids : prev.completedNodeIds,
+              nodeStars: (p.node_stars && typeof p.node_stars === 'object') ? p.node_stars : prev.nodeStars
             }));
           }
         }
@@ -278,8 +301,6 @@ export const ChallengeEditor: React.FC = () => {
     }
 
     confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
-    const nodeId = activeNode?.id || 'node-1';
-    const subId = `${nodeId}-sub-${subLevelIdx}`;
     completeChallenge(subId, 3, challenge.xpReward, challenge.coinReward);
     if (subLevelIdx >= 75) {
       completeChallenge(nodeId, 3, 0, 0);

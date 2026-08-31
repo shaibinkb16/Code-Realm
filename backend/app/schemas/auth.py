@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field
 from uuid import UUID
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -40,6 +40,8 @@ class UserProfileResponse(BaseModel):
     pet_stage: str
     pet_level: int
     hq_level: str
+    completed_node_ids: List[str] = Field(default_factory=list)
+    node_stars: dict = Field(default_factory=dict)
 
     class Config:
         from_attributes = True

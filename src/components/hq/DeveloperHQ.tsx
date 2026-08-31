@@ -129,6 +129,23 @@ export const DeveloperHQ: React.FC = () => {
     }
   };
 
+  const handleClaimPassive = async () => {
+    if (passiveIncome <= 0) {
+      triggerNotification('No passive income yet! Upgrade your HQ to earn daily coins.');
+      return;
+    }
+    try {
+      const res = await api.claimPassiveIncome();
+      setProfile((prev: any) => ({
+        ...prev,
+        coins: res.coins
+      }));
+      triggerNotification(res.message);
+    } catch (err: any) {
+      triggerNotification(err.message || 'Failed to claim coins');
+    }
+  };
+
   const fetchBriefing = async () => {
     setIsLoadingBriefing(true);
     setBriefing('');
@@ -180,7 +197,16 @@ Give me: 1 motivational opener, 2 specific daily missions targeting my weakest s
             <div style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '4px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--space-2)' }}>
               <span>Pet: {profile.pet?.name} ({profile.pet?.stage})</span>
               <span style={{ color: 'var(--border-subtle)' }}>|</span>
-              <span style={{ color: 'var(--success)' }}>+{passiveIncome} Coins/day</span>
+              <span style={{ color: 'var(--success)', fontWeight: 600 }}>+{passiveIncome} Coins/day</span>
+              {passiveIncome > 0 && (
+                <button
+                  onClick={handleClaimPassive}
+                  className="btn-secondary"
+                  style={{ padding: '2px 8px', fontSize: '11px', fontWeight: 700, color: 'var(--accent-gold)', borderColor: 'var(--accent-gold)', marginLeft: '4px' }}
+                >
+                  🪙 Claim
+                </button>
+              )}
             </div>
           </div>
         </div>

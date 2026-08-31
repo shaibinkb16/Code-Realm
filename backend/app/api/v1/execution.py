@@ -54,11 +54,39 @@ async def submit_code_solution(
     result = await execution_service.execute_code(req.code, req.language, test_cases)
 
     
-    # 2. Map Challenge difficulty to an Elo rating
+    # 2. Map Challenge difficulty to an Elo rating and ensure challenge entity exists
     challenge_rating = 1000
+    valid_challenge_id = None
     if req.challenge_id:
         challenge = await db.get(Challenge, req.challenge_id)
+        if not challenge:
+            from sqlalchemy import select
+            res = await db.execute(select(Challenge).where(Challenge.node_id == req.challenge_id).limit(1))
+            challenge = res.scalar_one_or_none()
+        
+        if not challenge:
+            # Create challenge entry dynamically so foreign key constraints are satisfied
+            try:
+                challenge = Challenge(
+                    id=req.challenge_id,
+                    node_id=req.challenge_id,
+                    realm_id="Code Realm",
+                    title=f"Challenge {req.challenge_id}",
+                    type="puzzle",
+                    difficulty="Medium",
+                    description="Code Realm Challenge",
+                    language=req.language or "python",
+                    generated_by="ai",
+                    validation_status="approved"
+                )
+                db.add(challenge)
+                await db.flush()
+            except Exception:
+                await db.rollback()
+                challenge = None
+
         if challenge:
+            valid_challenge_id = challenge.id
             if challenge.difficulty.lower() == "easy":
                 challenge_rating = 800
             elif challenge.difficulty.lower() == "medium":
@@ -68,6 +96,7 @@ async def submit_code_solution(
 
     # 3. Gamification Logic
     if current_user.profile:
+        from sqlalchemy.orm.attributes import flag_modified
         game_service.update_streak(current_user.profile)
         old_rating = current_user.profile.rank_rating
         
@@ -75,29 +104,42 @@ async def submit_code_solution(
         won = result.all_passed
         rating_change = game_service.calculate_elo_change(old_rating, challenge_rating, won)
         new_rating = old_rating + rating_change
+        current_user.profile.rank_rating = new_rating
+        current_user.profile.rank = game_service.get_league_from_rating(new_rating)
         
         if won:
-            # Add XP and Coins
-            xp_reward = result.xp_earned
-            coin_reward = result.coins_earned
+            xp_reward = result.xp_earned or 100
+            coin_reward = result.coins_earned or 50
+            stars_reward = result.stars_earned or 3
             
-            # Use game service to calculate level ups
+            # Level and XP calculation
             level_info = game_service.calculate_level_and_xp(current_user.profile, xp_reward)
             current_user.profile.level = level_info["level"]
             current_user.profile.xp = level_info["xp"]
             current_user.profile.next_level_xp = level_info["next_level_xp"]
             current_user.profile.coins += coin_reward
-            current_user.profile.stars += result.stars_earned
+            current_user.profile.stars += stars_reward
             
+            if req.challenge_id:
+                c_ids = list(current_user.profile.completed_node_ids or [])
+                if req.challenge_id not in c_ids:
+                    c_ids.append(req.challenge_id)
+                    current_user.profile.completed_node_ids = c_ids
+                
+                n_stars = dict(current_user.profile.node_stars or {})
+                existing_s = n_stars.get(req.challenge_id, 0)
+                n_stars[req.challenge_id] = max(existing_s, stars_reward)
+                current_user.profile.node_stars = n_stars
+
+                flag_modified(current_user.profile, "completed_node_ids")
+                flag_modified(current_user.profile, "node_stars")
+
             # Check for achievements
             await game_service.evaluate_achievements(db, current_user.id, current_user.profile, "first_challenge_completed")
         else:
             # Log Mistake
-            if req.challenge_id:
-                # Figure out error type
+            if valid_challenge_id:
                 error_type = result.status if result.status != "FAILED" else "LogicError"
-                
-                # Look for exception in output if it's a runtime error
                 error_message = result.output
                 if "SyntaxError" in result.output:
                     error_type = "SyntaxError"
@@ -106,7 +148,7 @@ async def submit_code_solution(
                 
                 mistake = MistakeLog(
                     user_id=current_user.id,
-                    challenge_id=req.challenge_id,
+                    challenge_id=valid_challenge_id,
                     error_type=error_type,
                     error_message=error_message,
                     code_snapshot=req.code
@@ -114,11 +156,11 @@ async def submit_code_solution(
                 db.add(mistake)
             
         # Save Code Submission to Database
-        if req.challenge_id:
+        if valid_challenge_id:
             from app.models.submission import CodeSubmission
             submission_record = CodeSubmission(
                 user_id=current_user.id,
-                challenge_id=req.challenge_id,
+                challenge_id=valid_challenge_id,
                 submitted_code=req.code,
                 language=req.language,
                 status="passed" if won else (result.status.lower() if result.status else "failed"),
@@ -127,31 +169,6 @@ async def submit_code_solution(
             )
             db.add(submission_record)
 
-        if current_user.profile:
-            current_user.profile.rank_rating = new_rating
-            current_user.profile.rank = game_service.get_league_from_rating(new_rating)
-            if won:
-                xp_earned = getattr(result, 'xp_earned', 100) or 100
-                coins_earned = getattr(result, 'coins_earned', 50) or 50
-                stars_earned = getattr(result, 'stars_earned', 3) or 3
-
-                current_user.profile.xp += xp_earned
-                current_user.profile.coins += coins_earned
-                current_user.profile.stars += stars_earned
-                current_user.profile.level = (current_user.profile.xp // 1000) + 1
-                current_user.profile.next_level_xp = current_user.profile.level * 1000
-
-                if req.challenge_id:
-                    c_ids = list(current_user.profile.completed_node_ids or [])
-                    if req.challenge_id not in c_ids:
-                        c_ids.append(req.challenge_id)
-                        current_user.profile.completed_node_ids = c_ids
-                    
-                    n_stars = dict(current_user.profile.node_stars or {})
-                    existing_s = n_stars.get(req.challenge_id, 0)
-                    n_stars[req.challenge_id] = max(existing_s, stars_earned)
-                    current_user.profile.node_stars = n_stars
-        
         # Save History
         history = RatingHistory(
             user_id=current_user.id,
@@ -159,7 +176,7 @@ async def submit_code_solution(
             old_rating=old_rating,
             new_rating=new_rating,
             change_reason="challenge_completed" if won else "challenge_failed",
-            challenge_id=req.challenge_id
+            challenge_id=valid_challenge_id
         )
         db.add(history)
         await db.commit()
