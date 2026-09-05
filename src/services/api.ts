@@ -339,10 +339,10 @@ class ApiClient {
     return await res.json();
   }
 
-  async saveUserProgress(nodeId: string, stars: number = 3, xp: number = 100, coins: number = 50) {
+  async saveUserProgress(nodeId: string, difficulty?: string) {
     const res = await this.fetchWithAuth(`${API_BASE_URL}/user/progress`, {
       method: 'POST',
-      body: JSON.stringify({ node_id: nodeId, stars, xp, coins })
+      body: JSON.stringify({ node_id: nodeId, difficulty })
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));

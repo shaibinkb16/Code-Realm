@@ -7,9 +7,9 @@ from app.core.logging import logger
 
 # Hardcoded verified model cascades directly in code
 DEFAULT_GEMINI_MODELS = [
-    "gemini-3.5-flash",
-    "gemini-3.6-flash",
-    "gemini-3.5-flash-lite",
+    "gemini-flash-lite-latest",
+    "gemini-flash-latest",
+    "gemini-2.5-flash-lite",
 ]
 
 DEFAULT_GROQ_MODELS = [
@@ -80,7 +80,7 @@ async def call_llm_with_fallback(
         # TIER 1: GOOGLE GEMINI MODELS (Directly In Code)
         # ─────────────────────────────────────────────
         if settings.AI_API_KEY and len(settings.AI_API_KEY.strip()) > 5:
-            configured = settings.GEMINI_MODEL.strip() if settings.GEMINI_MODEL else "gemini-3.5-flash"
+            configured = settings.GEMINI_MODEL.strip() if settings.GEMINI_MODEL else "gemini-flash-latest"
             gemini_models = list(dict.fromkeys([configured] + DEFAULT_GEMINI_MODELS))
             payload = {
                 "system_instruction": {"parts": [{"text": system_prompt}]},

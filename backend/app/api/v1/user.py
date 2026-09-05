@@ -27,7 +27,7 @@ PET_STAGES = ["Baby", "Junior", "Advanced", "Master", "Legend Dragon"]
 
 def update_user_streak(profile: UserProfile):
     """Calculates and updates consecutive daily active coding streak."""
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     if profile.last_activity_date:
         last_date = profile.last_activity_date.date()
         today = now.date()

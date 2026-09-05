@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
 from typing import Optional, List
 from app.core.database import get_db
 from app.api.deps import get_current_user
@@ -40,6 +41,7 @@ async def recommend_practice(
         # Find a problem from MistakeLog
         res = await db.execute(
             select(Challenge)
+            .options(selectinload(Challenge.test_cases))
             .join(MistakeLog, Challenge.id == MistakeLog.challenge_id)
             .where(MistakeLog.user_id == current_user.id)
             .limit(10)
@@ -88,7 +90,7 @@ async def recommend_practice(
 
         target_diff = "Easy" if target_elo < 1200 else ("Medium" if target_elo < 1800 else "Hard")
 
-        query = select(Challenge).where(Challenge.difficulty == target_diff)
+        query = select(Challenge).options(selectinload(Challenge.test_cases)).where(Challenge.difficulty == target_diff)
         if weakest_topic_name:
             query = query.where(Challenge.type == weakest_topic_name)
         res = await db.execute(query.limit(10))
@@ -99,7 +101,7 @@ async def recommend_practice(
         # difficulty-matched challenge rather than failing the recommendation.
         if not challenges and weakest_topic_name:
             res = await db.execute(
-                select(Challenge).where(Challenge.difficulty == target_diff).limit(10)
+                select(Challenge).options(selectinload(Challenge.test_cases)).where(Challenge.difficulty == target_diff).limit(10)
             )
             challenges = res.scalars().all()
 

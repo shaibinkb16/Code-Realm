@@ -20,7 +20,7 @@ def _best_guess_provider_and_model() -> tuple[str, str]:
     returning a plain string).
     """
     if settings.AI_API_KEY and len(settings.AI_API_KEY.strip()) > 5:
-        return "gemini", (settings.GEMINI_MODEL or "gemini-2.5-flash")
+        return "gemini", (settings.GEMINI_MODEL or "gemini-flash-latest")
     if settings.GROQ_API_KEY and len(settings.GROQ_API_KEY.strip()) > 5:
         return "groq", "openai/gpt-oss-120b"
     return "local-fallback", "built-in"

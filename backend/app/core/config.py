@@ -21,17 +21,11 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15  # 15 minutes
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    # CORS
+    # CORS — local dev + deployed Vercel frontend.
     CORS_ORIGINS: List[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
-        "http://localhost:3000"
-    ]
-
-    # Add your deployed frontend origin(s) here so browsers can call the API.
-    # For example, the Vercel production alias used by the frontend:
-    # https://code-realm-frontend.vercel.app
-    CORS_ORIGINS: List[str] = CORS_ORIGINS + [
+        "http://localhost:3000",
         "https://code-realm-frontend.vercel.app",
     ]
 
@@ -80,7 +74,7 @@ class Settings(BaseSettings):
     # NOTE: the previous default ("gemini-3.5-flash") is not a released Gemini
     # model id, so every request fell through to the Groq tier. Verify this
     # against Google's current model list for your API key before deploying.
-    GEMINI_MODEL: str = Field(default="gemini-2.5-flash", env="GEMINI_MODEL")
+    GEMINI_MODEL: str = Field(default="gemini-flash-lite-latest", env="GEMINI_MODEL")
 
 
 

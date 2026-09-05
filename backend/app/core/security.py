@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timedelta
 from typing import Any, Union
 from passlib.context import CryptContext
@@ -28,6 +29,7 @@ def create_access_token(subject: Union[str, Any], expires_delta: timedelta = Non
         "exp": expire,
         "sub": str(subject),
         "iat": datetime.utcnow(),
+        "jti": uuid.uuid4().hex,
         "type": "access"
     }
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
@@ -39,6 +41,7 @@ def create_refresh_token(subject: Union[str, Any]) -> str:
         "exp": expire,
         "sub": str(subject),
         "iat": datetime.utcnow(),
+        "jti": uuid.uuid4().hex,
         "type": "refresh"
     }
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)

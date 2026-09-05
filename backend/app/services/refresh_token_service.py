@@ -42,16 +42,17 @@ async def record(
     the real work they're doing.
     """
     try:
-        db.add(
-            RefreshToken(
-                user_id=user_id,
-                token_hash=_hash(token),
-                expires_at=datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
-                ip_address=ip_address,
-                user_agent=user_agent,
+        async with db.begin_nested():
+            db.add(
+                RefreshToken(
+                    user_id=user_id,
+                    token_hash=_hash(token),
+                    expires_at=datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                )
             )
-        )
-        await db.flush()
+            await db.flush()
     except Exception:
         logger.warning("Failed to record refresh token for user_id=%s", user_id)
 

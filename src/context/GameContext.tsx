@@ -156,8 +156,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const completeChallenge = (nodeId: string, stars: number, xp: number, coins: number) => {
-    // Persist progress to backend PostgreSQL database
-    api.saveUserProgress(nodeId, stars, xp, coins).catch(err => {
+    // Persist progress to backend PostgreSQL database (server-authoritative rewards)
+    api.saveUserProgress(nodeId).catch(err => {
       console.warn('Failed to persist progress to database:', err);
     });
 
