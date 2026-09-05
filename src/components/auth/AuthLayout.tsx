@@ -12,16 +12,27 @@ import './AuthView.css';
 
 type AuthViewMode = 'login' | 'register' | 'otp' | 'onboarding' | 'security';
 
-export const AuthLayout: React.FC = () => {
+interface AuthLayoutProps {
+  initialMode?: 'login' | 'register';
+  onClose?: () => void;
+}
+
+export const AuthLayout: React.FC<AuthLayoutProps> = ({ initialMode = 'login', onClose }) => {
   const { login, register, finalizeLogin } = useAuth();
   const { success, error: showError } = useToast();
 
-  const [viewMode, setViewMode] = useState<AuthViewMode>('login');
+  const [viewMode, setViewMode] = useState<AuthViewMode>(initialMode);
   const [legalModalType, setLegalModalType] = useState<LegalModalType>(null);
   const [formData, setFormData] = useState({ username: '', email: '', password: '' });
   const [otpCode, setOtpCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
+
+  useEffect(() => {
+    if (initialMode) {
+      setViewMode(initialMode);
+    }
+  }, [initialMode]);
 
   useEffect(() => {
     // Handle URL hash auth callbacks or error messages
@@ -137,12 +148,34 @@ export const AuthLayout: React.FC = () => {
     <div className="cr-auth-wrapper">
       <div className="cr-auth-container">
         {/* Top Navigation Header */}
-        <header className="cr-auth-header">
+        <header className="cr-auth-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div className="cr-logo">
-            <span className="cr-logo-icon">&lt;/&gt;</span>
+            <img
+              src="/logo.jpg"
+              alt="CODE REALM"
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '8px',
+                objectFit: 'cover',
+                border: '1px solid rgba(99, 102, 241, 0.4)',
+                boxShadow: '0 0 12px rgba(99, 102, 241, 0.3)'
+              }}
+            />
             <span className="cr-logo-text">CODE</span>
             <span className="cr-logo-sub">REALM</span>
           </div>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="cr-sec-center-btn"
+              style={{ padding: '6px 14px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <ArrowLeft size={14} />
+              <span>Back to Landing Page</span>
+            </button>
+          )}
         </header>
 
         {/* Main Content Split */}

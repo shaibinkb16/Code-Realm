@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { GameProvider, useGame } from './context/GameContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
-import { AuthView } from './components/auth/AuthView';
+import { LandingPage } from './components/landing/LandingPage';
+import { AuthLayout } from './components/auth/AuthLayout';
 import { Sidebar } from './components/layout/Sidebar';
 import { HeaderBar } from './components/layout/HeaderBar';
 import { AICompanionModal } from './components/layout/AICompanionModal';
@@ -84,6 +85,7 @@ const MainAppContent: React.FC = () => {
 const AppContent: React.FC = () => {
   const { user, isLoading } = useAuth();
   const [isPreviewStudentView, setIsPreviewStudentView] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'register' | null>(null);
 
   if (isLoading) {
     return (
@@ -97,7 +99,18 @@ const AppContent: React.FC = () => {
   }
 
   if (!user) {
-    return <AuthView />;
+    return (
+      <>
+        <LandingPage onOpenAuth={(mode) => setAuthModalMode(mode || 'register')} />
+        {authModalMode && (
+          <div className="landing-auth-modal-overlay" onClick={() => setAuthModalMode(null)}>
+            <div className="landing-auth-modal-container" onClick={(e) => e.stopPropagation()}>
+              <AuthLayout initialMode={authModalMode} onClose={() => setAuthModalMode(null)} />
+            </div>
+          </div>
+        )}
+      </>
+    );
   }
 
   // Administrators log directly into the dedicated Admin Dashboard Portal
