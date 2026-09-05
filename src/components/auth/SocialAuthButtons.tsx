@@ -13,11 +13,13 @@ export const SocialAuthButtons: React.FC<SocialAuthButtonsProps> = ({ onSuccess,
   const [isPasskeyLoading, setIsPasskeyLoading] = useState(false);
 
   const handleGoogleLogin = () => {
-    window.location.href = `${API_BASE_URL}/auth/google`;
+    const origin = encodeURIComponent(window.location.origin);
+    window.location.href = `${API_BASE_URL}/auth/google?origin=${origin}`;
   };
 
   const handleGitHubLogin = () => {
-    window.location.href = `${API_BASE_URL}/auth/github`;
+    const origin = encodeURIComponent(window.location.origin);
+    window.location.href = `${API_BASE_URL}/auth/github?origin=${origin}`;
   };
 
   const handlePasskeyLogin = async () => {
