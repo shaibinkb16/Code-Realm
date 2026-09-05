@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, status, HTTPException, BackgroundTasks, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 import uuid
 import random
 import string
+import json
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 
@@ -239,10 +240,30 @@ from fastapi.responses import RedirectResponse
 from app.core.config import settings
 from app.core.logging import logger
 
+def _get_oauth_redirect_uri(request: Request, provider: str) -> str:
+    """Returns the callback URI for OAuth, falling back to auto-detected server host if not configured."""
+    configured_uri = settings.GOOGLE_REDIRECT_URI if provider == "google" else settings.GITHUB_REDIRECT_URI
+    if configured_uri and "localhost:8000" not in configured_uri:
+        return configured_uri
+
+    server_base = str(request.base_url).rstrip('/')
+    # If forwarded by proxy (e.g., Render/Nginx), check for https scheme
+    proto = request.headers.get("x-forwarded-proto")
+    if proto == "https" and server_base.startswith("http://"):
+        server_base = "https://" + server_base[len("http://"):]
+
+    path_prefix = "/api/v1/auth" if "/api/v1/" in str(request.url) else "/api/auth"
+    return f"{server_base}{path_prefix}/{provider}/callback"
+
+def _get_frontend_base(origin: str | None = None) -> str:
+    if origin and (origin.startswith("http://") or origin.startswith("https://")):
+        return origin.rstrip('/')
+    return settings.FRONTEND_URL.rstrip('/')
+
 @router.get("/google")
-async def google_login():
+async def google_login(request: Request, origin: str | None = None):
     """Initiates Google OAuth 2.0 authorization flow."""
-    frontend_base = settings.FRONTEND_URL.rstrip('/')
+    frontend_base = _get_frontend_base(origin)
     if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_ID.strip():
         logger.error("Google OAuth login attempted but GOOGLE_CLIENT_ID is not configured.")
         return RedirectResponse(
@@ -251,13 +272,16 @@ async def google_login():
         )
 
     state = secrets.token_urlsafe(32)
-    await redis_manager.set(f"oauth_state:{state}", "1", ttl=600)
+    state_payload = {"origin": frontend_base, "csrf": secrets.token_hex(16)}
+    await redis_manager.set(f"oauth_state:{state}", json.dumps(state_payload), ttl=600)
+
+    redirect_uri = _get_oauth_redirect_uri(request, "google")
 
     params = {
         "client_id": settings.GOOGLE_CLIENT_ID,
         "response_type": "code",
         "scope": "openid email profile",
-        "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+        "redirect_uri": redirect_uri,
         "state": state,
         "access_type": "offline",
         "prompt": "select_account"
@@ -267,6 +291,7 @@ async def google_login():
 
 @router.get("/google/callback")
 async def google_callback(
+    request: Request,
     code: str | None = None,
     state: str | None = None,
     error: str | None = None,
@@ -274,17 +299,25 @@ async def google_callback(
 ):
     """Processes Google OAuth callback code, verifies identity, provisions user, and redirects with JWT tokens."""
     frontend_base = settings.FRONTEND_URL.rstrip('/')
-    
+
+    # 1. Validate CSRF state & retrieve originating frontend URL
+    if state:
+        stored_state_str = await redis_manager.get(f"oauth_state:{state}")
+        if stored_state_str:
+            try:
+                stored_data = json.loads(stored_state_str)
+                if isinstance(stored_data, dict) and "origin" in stored_data:
+                    frontend_base = stored_data["origin"].rstrip('/')
+            except Exception:
+                pass
+            await redis_manager.delete(f"oauth_state:{state}")
+
     if error or not code:
         logger.warning(f"Google OAuth callback error or missing code: error={error}")
         return RedirectResponse(url=f"{frontend_base}/#auth_error?message=Google%20Authentication%20Cancelled", status_code=307)
 
-    # 1. Validate CSRF state
-    if state:
-        stored_state = await redis_manager.get(f"oauth_state:{state}")
-        if stored_state:
-            await redis_manager.delete(f"oauth_state:{state}")
-    
+    redirect_uri = _get_oauth_redirect_uri(request, "google")
+
     # 2. Exchange authorization code with Google
     token_url = "https://oauth2.googleapis.com/token"
     token_data = {
@@ -292,7 +325,7 @@ async def google_callback(
         "client_secret": settings.GOOGLE_CLIENT_SECRET,
         "code": code,
         "grant_type": "authorization_code",
-        "redirect_uri": settings.GOOGLE_REDIRECT_URI
+        "redirect_uri": redirect_uri
     }
     
     try:
@@ -369,7 +402,6 @@ async def google_callback(
                 final_username = f"{base_username[:25]}_{counter}"
                 counter += 1
 
-            import uuid
             new_user = User(
                 email=clean_email,
                 username=final_username,
@@ -402,9 +434,9 @@ async def google_callback(
     return RedirectResponse(url=redirect_url, status_code=307)
 
 @router.get("/github")
-async def github_login():
+async def github_login(request: Request, origin: str | None = None):
     """Initiates GitHub OAuth 2.0 authorization flow."""
-    frontend_base = settings.FRONTEND_URL.rstrip('/')
+    frontend_base = _get_frontend_base(origin)
     if not settings.GITHUB_CLIENT_ID or not settings.GITHUB_CLIENT_ID.strip():
         logger.error("GitHub OAuth login attempted but GITHUB_CLIENT_ID is not configured.")
         return RedirectResponse(
@@ -413,11 +445,14 @@ async def github_login():
         )
 
     state = secrets.token_urlsafe(32)
-    await redis_manager.set(f"oauth_state:{state}", "1", ttl=600)
+    state_payload = {"origin": frontend_base, "csrf": secrets.token_hex(16)}
+    await redis_manager.set(f"oauth_state:{state}", json.dumps(state_payload), ttl=600)
+
+    redirect_uri = _get_oauth_redirect_uri(request, "github")
 
     params = {
         "client_id": settings.GITHUB_CLIENT_ID,
-        "redirect_uri": settings.GITHUB_REDIRECT_URI,
+        "redirect_uri": redirect_uri,
         "scope": "read:user user:email",
         "state": state
     }
@@ -426,6 +461,7 @@ async def github_login():
 
 @router.get("/github/callback")
 async def github_callback(
+    request: Request,
     code: str | None = None,
     state: str | None = None,
     error: str | None = None,
@@ -433,16 +469,24 @@ async def github_callback(
 ):
     """Processes GitHub OAuth callback, verifies identity, retrieves user emails, provisions user, and redirects with JWT tokens."""
     frontend_base = settings.FRONTEND_URL.rstrip('/')
-    
+
+    # 1. Validate CSRF state & retrieve originating frontend URL
+    if state:
+        stored_state_str = await redis_manager.get(f"oauth_state:{state}")
+        if stored_state_str:
+            try:
+                stored_data = json.loads(stored_state_str)
+                if isinstance(stored_data, dict) and "origin" in stored_data:
+                    frontend_base = stored_data["origin"].rstrip('/')
+            except Exception:
+                pass
+            await redis_manager.delete(f"oauth_state:{state}")
+
     if error or not code:
         logger.warning(f"GitHub OAuth callback error or missing code: error={error}")
         return RedirectResponse(url=f"{frontend_base}/#auth_error?message=GitHub%20Authentication%20Cancelled", status_code=307)
 
-    # 1. Validate CSRF state
-    if state:
-        stored_state = await redis_manager.get(f"oauth_state:{state}")
-        if stored_state:
-            await redis_manager.delete(f"oauth_state:{state}")
+    redirect_uri = _get_oauth_redirect_uri(request, "github")
 
     # 2. Exchange authorization code with GitHub
     token_url = "https://github.com/login/oauth/access_token"
@@ -450,7 +494,7 @@ async def github_callback(
         "client_id": settings.GITHUB_CLIENT_ID,
         "client_secret": settings.GITHUB_CLIENT_SECRET,
         "code": code,
-        "redirect_uri": settings.GITHUB_REDIRECT_URI
+        "redirect_uri": redirect_uri
     }
 
     try:
@@ -552,7 +596,6 @@ async def github_callback(
                 final_username = f"{base_username[:25]}_{counter}"
                 counter += 1
 
-            import uuid
             new_user = User(
                 email=clean_email,
                 username=final_username,
