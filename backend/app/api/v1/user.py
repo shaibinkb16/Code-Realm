@@ -1,10 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timezone
+from typing import Optional
 
 from app.core.database import get_db
 from app.models.user import User, UserProfile
+from app.models.challenge import Challenge
 from app.api.deps import get_current_user
+from app.services.reward_service import reward_service
+from app.services.game_service import game_service
+from app.services.mastery_service import mastery_service
+from app.services.mission_service import mission_service
 
 router = APIRouter()
 
@@ -39,10 +45,16 @@ def update_user_streak(profile: UserProfile):
 from pydantic import BaseModel
 
 class SaveProgressRequest(BaseModel):
+    """
+    Marks a node complete.
+
+    Note there are deliberately no xp/coins/stars fields: this endpoint used to
+    accept those from the client and add them straight to the profile, which let
+    a modified client award itself arbitrary progress. Amounts are now derived
+    server-side from the node's difficulty by RewardService.
+    """
     node_id: str
-    stars: int = 3
-    xp: int = 100
-    coins: int = 50
+    difficulty: Optional[str] = None  # advisory only; verified against the DB below
 
 
 @router.get("/profile")
@@ -55,6 +67,99 @@ async def get_user_profile(
         update_user_streak(current_user.profile)
         await db.commit()
     return current_user
+
+
+@router.get("/mastery")
+async def get_skill_mastery(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Per-language and per-challenge-type skill breakdown, e.g.:
+        Python        ███████░░░ 72%
+        Bug Hunting   █████████░ 91%
+
+    Backed by user_language_mastery / user_topic_mastery, populated on every
+    graded submission by MasteryService (see api/v1/execution.py) — previously
+    these tables existed in the schema but nothing ever wrote to them, so this
+    endpoint would have returned nothing.
+    """
+    breakdown = await mastery_service.get_skill_breakdown(db, current_user.id)
+    return {"status": "SUCCESS", **breakdown}
+
+
+@router.get("/daily-mission")
+async def get_daily_mission(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Today's checklist, computed live from real submission/reward history —
+    not a stored, independently-toggled state that can drift from what the
+    user actually did.
+    """
+    if not current_user.profile:
+        raise HTTPException(status_code=400, detail="Profile not found")
+    status_data = await mission_service.get_status(db, current_user.id, current_user.profile)
+    return {"status": "SUCCESS", **status_data}
+
+
+@router.post("/daily-mission/claim")
+async def claim_daily_mission(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Re-verifies completion server-side before granting the bonus — the
+    frontend's own view of "all_completed" is never trusted as authorization.
+    """
+    if not current_user.profile:
+        raise HTTPException(status_code=400, detail="Profile not found")
+    result = await mission_service.claim(db, current_user.id, current_user.profile)
+    await db.commit()
+    return {"status": "SUCCESS", **result}
+
+
+@router.get("/weekly-mission")
+async def get_weekly_mission(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """This week's checklist (Monday-Monday UTC) — same real-data-computed pattern as /daily-mission."""
+    if not current_user.profile:
+        raise HTTPException(status_code=400, detail="Profile not found")
+    status_data = await mission_service.get_status(db, current_user.id, current_user.profile, period="weekly")
+    return {"status": "SUCCESS", **status_data}
+
+
+@router.post("/weekly-mission/claim")
+async def claim_weekly_mission(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    if not current_user.profile:
+        raise HTTPException(status_code=400, detail="Profile not found")
+    result = await mission_service.claim(db, current_user.id, current_user.profile, period="weekly")
+    await db.commit()
+    return {"status": "SUCCESS", **result}
+
+
+@router.get("/achievements")
+async def get_achievements(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Server-authoritative achievement list with real progress/unlocked state.
+    Replaces the frontend's previous computeAchievements(), which derived its
+    own separate 10-achievement list from local profile state with no backend
+    record — a user could see "unlocked" client-side for something the server
+    never actually granted XP/coins for.
+    """
+    if not current_user.profile:
+        raise HTTPException(status_code=400, detail="Profile not found")
+    achievements = await game_service.get_achievement_status(db, current_user.id, current_user.profile)
+    return {"status": "SUCCESS", "achievements": achievements}
 
 
 from sqlalchemy.orm.attributes import flag_modified
@@ -73,6 +178,29 @@ async def save_user_progress(
     if not profile:
         raise HTTPException(status_code=400, detail="Profile not found")
 
+    # Trust the database's difficulty for this node, not the request body.
+    from sqlalchemy import select
+    res = await db.execute(
+        select(Challenge).where(Challenge.node_id == req.node_id).limit(1)
+    )
+    challenge = res.scalars().first()
+    difficulty = challenge.difficulty if challenge else req.difficulty
+
+    update_user_streak(profile)
+
+    # Grants exactly once per (user, node): replaying this call returns the
+    # original amounts instead of topping the balance up again.
+    reward = await reward_service.grant(
+        db,
+        user_id=current_user.id,
+        profile=profile,
+        reason="node_completed",
+        reference_id=req.node_id,
+        difficulty=difficulty,
+        won=True,
+        apply_rating=False,  # rating is owned by /execute/submit, not this path
+    )
+
     c_ids = list(profile.completed_node_ids or [])
     if req.node_id not in c_ids:
         c_ids.append(req.node_id)
@@ -80,17 +208,15 @@ async def save_user_progress(
 
     n_stars = dict(profile.node_stars or {})
     existing = n_stars.get(req.node_id, 0)
-    n_stars[req.node_id] = max(existing, req.stars)
+    n_stars[req.node_id] = max(existing, reward.stars or existing)
     profile.node_stars = n_stars
-
-    profile.xp += req.xp
-    profile.coins += req.coins
-    profile.stars += max(0, req.stars - existing)
-    profile.level = (profile.xp // 1000) + 1
-    profile.next_level_xp = profile.level * 1000
 
     flag_modified(profile, "completed_node_ids")
     flag_modified(profile, "node_stars")
+
+    unlocked = await game_service.evaluate_achievements(
+        db, current_user.id, profile, "first_challenge_completed"
+    )
 
     await db.commit()
 
@@ -100,7 +226,17 @@ async def save_user_progress(
         "node_stars": profile.node_stars,
         "xp": profile.xp,
         "level": profile.level,
-        "coins": profile.coins
+        "coins": profile.coins,
+        "stars": profile.stars,
+        "streak": profile.streak,
+        "awarded": {
+            "granted": reward.granted,
+            "xp": reward.xp,
+            "coins": reward.coins,
+            "stars": reward.stars,
+            "leveled_up": reward.leveled_up,
+        },
+        "unlocked_achievements": unlocked,
     }
 
 @router.post("/hq/upgrade")

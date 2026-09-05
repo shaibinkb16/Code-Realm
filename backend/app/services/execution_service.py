@@ -9,10 +9,16 @@ import re
 from typing import Dict, Any, List
 
 from app.schemas.execution import ExecutionResponse, TestResultResponse
+from app.core.config import settings
 from app.core.redis import redis_manager
 from app.core.logging import logger
 import asyncio
 import uuid
+
+# How long to wait for the sandboxed worker before falling back to local
+# execution. Covers container pull/startup + the worker's own internal 10s
+# container timeout with a small margin.
+SANDBOX_RESULT_TIMEOUT_SEC = 12
 
 class ExecutionService:
     @staticmethod
@@ -318,9 +324,50 @@ testCases.forEach((tc, i) => {{
             return {"status": "RUNTIME_ERROR", "output": str(e), "test_results": []}
 
     @staticmethod
+    async def _execute_sandboxed(user_code: str, language: str, test_cases: List[Dict[str, Any]]) -> Dict[str, Any] | None:
+        """
+        Attempt execution in the isolated Docker sandbox (core/worker.py) via
+        the ARQ job queue. Returns None — never raises — if the sandbox is
+        unavailable or doesn't respond in time, so callers can transparently
+        fall back to local execution.
+
+        Gated behind settings.EXECUTION_USE_SANDBOX, which defaults to False:
+        enqueuing a job only does something useful if a separate `arq
+        app.core.worker.WorkerSettings` process is actually running and
+        consuming the same Redis queue. Flip the flag on only once that
+        worker process is deployed alongside the API.
+        """
+        if not settings.EXECUTION_USE_SANDBOX:
+            return None
+        if not redis_manager.arq_pool:
+            logger.warning("EXECUTION_USE_SANDBOX is on but no ARQ pool is connected; using local execution.")
+            return None
+
+        try:
+            job = await redis_manager.arq_pool.enqueue_job(
+                "run_code_task",
+                str(uuid.uuid4()),
+                user_code,
+                language,
+                test_cases,
+            )
+            if job is None:
+                return None
+            result = await job.result(timeout=SANDBOX_RESULT_TIMEOUT_SEC)
+            if not isinstance(result, dict) or "status" not in result:
+                return None
+            return result
+        except asyncio.TimeoutError:
+            logger.warning("Sandbox execution timed out after %ss; falling back to local execution.", SANDBOX_RESULT_TIMEOUT_SEC)
+            return None
+        except Exception as e:
+            logger.warning("Sandbox execution unavailable (%s); falling back to local execution.", e)
+            return None
+
+    @staticmethod
     async def execute_code(user_code: str, language: str, test_cases: List[Dict[str, Any]]) -> ExecutionResponse:
         start_time = time.time()
-        
+
         prohibited_modules = ["os", "sys", "subprocess", "shutil", "socket", "urllib", "requests", "child_process", "fs"]
         for mod in prohibited_modules:
             if f"import {mod}" in user_code or f"from {mod}" in user_code or f"require('{mod}')" in user_code:
@@ -336,10 +383,13 @@ testCases.forEach((tc, i) => {{
                 )
 
         lang = (language or "python").lower()
-        if lang in ["javascript", "js", "typescript", "ts", "cpp", "c++", "c", "java", "cs", "csharp"]:
-            result = await ExecutionService._execute_js_locally(user_code, test_cases, lang)
-        else:
-            result = await ExecutionService._execute_python_locally(user_code, test_cases)
+
+        result = await ExecutionService._execute_sandboxed(user_code, lang, test_cases)
+        if result is None:
+            if lang in ["javascript", "js", "typescript", "ts", "cpp", "c++", "c", "java", "cs", "csharp"]:
+                result = await ExecutionService._execute_js_locally(user_code, test_cases, lang)
+            else:
+                result = await ExecutionService._execute_python_locally(user_code, test_cases)
 
         elapsed_ms = result.get("execution_time_ms", int((time.time() - start_time) * 1000))
         all_passed = result.get("status") == "ACCEPTED"

@@ -2,9 +2,29 @@ import uuid
 import time
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.config import settings
 from app.core.llm_client import call_llm_with_fallback
 from app.models.admin import LLMUsageLog
 from app.core.logging import logger
+
+
+def _best_guess_provider_and_model() -> tuple[str, str]:
+    """
+    call_llm_with_fallback() returns only a string, not which tier actually
+    served the request, so this can't be exact — but it's a real improvement
+    over the previous hardcoded ("gemini", "gemini-3.6-flash") log entry that
+    was wrong whenever Groq or the local fallback tier actually served the
+    request. Reflects which tier the cascade would try first given current
+    config, which is the best available signal without changing
+    call_llm_with_fallback's return contract (other callers depend on it
+    returning a plain string).
+    """
+    if settings.AI_API_KEY and len(settings.AI_API_KEY.strip()) > 5:
+        return "gemini", (settings.GEMINI_MODEL or "gemini-2.5-flash")
+    if settings.GROQ_API_KEY and len(settings.GROQ_API_KEY.strip()) > 5:
+        return "groq", "openai/gpt-oss-120b"
+    return "local-fallback", "built-in"
+
 
 class LLMGatewayService:
     @staticmethod
@@ -18,8 +38,7 @@ class LLMGatewayService:
     ) -> str:
         request_id = str(uuid.uuid4())
         start_time = time.time()
-        provider = "gemini"
-        model_name = "gemini-3.6-flash"
+        provider, model_name = _best_guess_provider_and_model()
         status = "success"
         error_type = None
 

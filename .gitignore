@@ -33,9 +33,12 @@ backend/coderealm_dev.db
 *.db
 *.sqlite3
 
-# Temporary Test Files
-test_*.py
-backend/test_*.py
+# Temporary/scratch test scripts only — NOT the real suite under backend/tests/,
+# which must stay trackable. The old bare `test_*.py` matched at any depth and
+# was silently excluding legitimate new files under backend/tests/api/.
+/test_*.py
+/scratch/test_*.py
+/backend/test_*.py
 
 # Editor & System
 .vscode/*

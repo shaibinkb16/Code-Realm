@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { api, API_BASE_URL } from '../../services/api';
+import type { CodeReviewResponse } from '../../services/api';
 import { AITeacherPanel } from './AITeacherPanel';
 import Editor from '@monaco-editor/react';
 import confetti from 'canvas-confetti';
@@ -80,6 +81,8 @@ export const ChallengeEditor: React.FC = () => {
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [isLoadingFeedback, setIsLoadingFeedback] = useState(false);
+  const [codeReview, setCodeReview] = useState<CodeReviewResponse | null>(null);
+  const [isLoadingReview, setIsLoadingReview] = useState(false);
 
   const [isSwapping, setIsSwapping] = useState(false);
   const [subLevelIdx, setSubLevelIdx] = useState<number>(() => {
@@ -196,9 +199,19 @@ export const ChallengeEditor: React.FC = () => {
     setTestResults([]);
 
     try {
+      const token = localStorage.getItem('coderealm_token');
+      if (!token) {
+        setOutput('❌ Please log in to run code.');
+        setIsExecuting(false);
+        return;
+      }
+
       const resp = await fetch(`${API_BASE}/execute/run`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify({
           code,
           language: selectedLanguage,
@@ -211,6 +224,7 @@ export const ChallengeEditor: React.FC = () => {
         }),
       });
 
+      if (resp.status === 401) throw new Error('Your session expired. Please log in again.');
       if (!resp.ok) throw new Error(`Execution server error ${resp.status}`);
 
       const result: ExecutionResult = await resp.json();
@@ -229,7 +243,7 @@ export const ChallengeEditor: React.FC = () => {
 
       setOutput(`${statusLine}\n\n${details}`);
     } catch (err) {
-      setOutput('❌ Could not reach the execution backend.');
+      setOutput(`❌ ${err instanceof Error ? err.message : 'Could not reach the execution backend.'}`);
     } finally {
       setIsExecuting(false);
     }
@@ -313,6 +327,28 @@ export const ChallengeEditor: React.FC = () => {
     setIsFeedbackOpen(true);
     setIsLoadingFeedback(true);
     setFeedbackText('');
+    setCodeReview(null);
+    setIsLoadingReview(true);
+
+    const formattedTestResults = testResults.map(r => ({
+      test_id: r.test_id,
+      description: r.description,
+      passed: r.passed,
+      expected_output: r.expected_output,
+      actual_output: r.actual_output,
+    }));
+
+    // Scored rubric fetched in parallel — independent of the free-text
+    // feedback call, so a slow/failed review never blocks the feedback text.
+    api.getCodeReview(
+      code,
+      challenge.title,
+      challenge.description,
+      formattedTestResults,
+      profile.rankRating || 905
+    )
+      .then(setCodeReview)
+      .finally(() => setIsLoadingReview(false));
 
     try {
       const resp = await fetch(`${API_BASE}/challenges/feedback`, {
@@ -322,13 +358,7 @@ export const ChallengeEditor: React.FC = () => {
           code,
           challenge_title: challenge.title,
           challenge_description: challenge.description,
-          test_results: testResults.map(r => ({
-            test_id: r.test_id,
-            description: r.description,
-            passed: r.passed,
-            expected_output: r.expected_output,
-            actual_output: r.actual_output,
-          })),
+          test_results: formattedTestResults,
           skill_rating: profile.rankRating || 905,
         }),
       });
@@ -401,6 +431,42 @@ export const ChallengeEditor: React.FC = () => {
                 : <><XCircle size={16} color="var(--error)" /><span style={{ color: 'var(--error)', fontWeight: 600, fontSize: '13px' }}>Tests Failed - Try Again</span></>
               }
             </div>
+
+            {(isLoadingReview || codeReview) && (
+              <div style={{
+                background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', marginBottom: 'var(--space-3)',
+              }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 'var(--space-2)' }}>
+                  AI Code Review
+                </div>
+                {isLoadingReview ? (
+                  <div className="flex-center" style={{ gap: 'var(--space-2)', fontSize: '13px', color: 'var(--text-muted)' }}>
+                    <Loader size={14} style={{ animation: 'spin 1s linear infinite' }} /> Scoring your submission...
+                  </div>
+                ) : codeReview && (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
+                      <span style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-main)' }}>{codeReview.overall_score}</span>
+                      <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>/ 100 overall</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
+                      {Object.entries(codeReview.breakdown).map(([key, value]) => (
+                        <div key={key} style={{ fontSize: '11px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)', marginBottom: '2px', textTransform: 'capitalize' }}>
+                            <span>{key}</span><span>{value}</span>
+                          </div>
+                          <div style={{ background: 'var(--bg-surface, rgba(255,255,255,0.05))', borderRadius: '999px', height: '5px', overflow: 'hidden' }}>
+                            <div style={{ width: `${value}%`, height: '100%', background: value >= 75 ? 'var(--success)' : value >= 40 ? 'var(--warning)' : 'var(--error)' }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>{codeReview.summary}</div>
+                  </>
+                )}
+              </div>
+            )}
 
             <div style={{
               background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',

@@ -12,6 +12,72 @@ const DEFAULT_API = isLocalhost
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || DEFAULT_API;
 
+export interface SkillMasteryEntry {
+  name: string;
+  category?: string;
+  mastery_percentage: number;
+  skill_rating: number;
+}
+
+export interface BackendAchievement {
+  id: string;
+  title: string;
+  description: string;
+  icon_name: string;
+  category: string;
+  xp_reward: number;
+  coin_reward: number;
+  unlocked: boolean;
+  progress: number;
+  target: number;
+}
+
+export interface DailyMissionTask {
+  id: string;
+  label: string;
+  progress: number;
+  target: number;
+  completed: boolean;
+}
+
+export interface DailyMissionResponse {
+  status: string;
+  period?: 'daily' | 'weekly';
+  tasks: DailyMissionTask[];
+  all_completed: boolean;
+  claimed: boolean;
+  bonus_xp: number;
+  bonus_coins: number;
+  resets_at: string;
+}
+
+export interface GhostPaceResponse {
+  median_seconds: number;
+  sample_size: number;
+  rating_band: string;
+}
+
+export interface CodeReviewResponse {
+  status: string;
+  overall_score: number;
+  breakdown: {
+    correctness: number;
+    performance: number;
+    readability: number;
+    security: number;
+    maintainability: number;
+  };
+  summary: string;
+  source: 'ai' | 'heuristic';
+}
+
+export interface SkillMasteryResponse {
+  status: string;
+  languages: SkillMasteryEntry[];
+  topics: SkillMasteryEntry[];
+  weakest_topic: string | null;
+}
+
 class ApiClient {
   private getHeaders(): HeadersInit {
     const token = localStorage.getItem('coderealm_token');
@@ -301,6 +367,101 @@ class ApiClient {
       throw new Error(err.detail || 'Failed to upgrade pet');
     }
     return await res.json();
+  }
+
+  async getCodeReview(
+    code: string,
+    challengeTitle: string,
+    challengeDescription: string,
+    testResults: Array<Record<string, unknown>>,
+    skillRating: number
+  ): Promise<CodeReviewResponse | null> {
+    try {
+      const res = await this.fetchWithAuth(`${API_BASE_URL}/challenges/review`, {
+        method: 'POST',
+        body: JSON.stringify({
+          code,
+          challenge_title: challengeTitle,
+          challenge_description: challengeDescription,
+          test_results: testResults,
+          skill_rating: skillRating,
+        }),
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async getGhostPace(rating: number): Promise<GhostPaceResponse | null> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/leaderboards/ghost-pace?rating=${encodeURIComponent(rating)}`);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async getAchievements(): Promise<{ status: string; achievements: BackendAchievement[] } | null> {
+    try {
+      const res = await this.fetchWithAuth(`${API_BASE_URL}/user/achievements`, { method: 'GET' });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async getDailyMission(): Promise<DailyMissionResponse | null> {
+    try {
+      const res = await this.fetchWithAuth(`${API_BASE_URL}/user/daily-mission`, { method: 'GET' });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async claimDailyMission(): Promise<{ status: string; xp?: number; coins?: number } | null> {
+    try {
+      const res = await this.fetchWithAuth(`${API_BASE_URL}/user/daily-mission/claim`, { method: 'POST' });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async getWeeklyMission(): Promise<DailyMissionResponse | null> {
+    try {
+      const res = await this.fetchWithAuth(`${API_BASE_URL}/user/weekly-mission`, { method: 'GET' });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async claimWeeklyMission(): Promise<{ status: string; xp?: number; coins?: number } | null> {
+    try {
+      const res = await this.fetchWithAuth(`${API_BASE_URL}/user/weekly-mission/claim`, { method: 'POST' });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async getSkillMastery(): Promise<SkillMasteryResponse | null> {
+    try {
+      const res = await this.fetchWithAuth(`${API_BASE_URL}/user/mastery`, { method: 'GET' });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
   }
 
   async claimPassiveIncome() {

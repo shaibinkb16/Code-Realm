@@ -1,29 +1,19 @@
 import React from 'react';
 import { useGame } from '../../context/GameContext';
-import { Trophy, Crown, Timer, Swords } from 'lucide-react';
+import { Trophy, Crown, Swords, Construction } from 'lucide-react';
 
 export const Championship: React.FC = () => {
-  const { profile, setActiveTab, triggerNotification } = useGame();
+  const { setActiveTab, triggerNotification } = useGame();
 
-  const bracketData = {
-    qualifiers: [
-      { p1: profile.username, p2: 'CodeRider', winner: profile.username, score: '3-1' },
-      { p1: 'ByteNinja', p2: 'AlgoMaster', winner: 'ByteNinja', score: '3-0' },
-      { p1: 'SyntaxQueen', p2: 'PyHero', winner: 'SyntaxQueen', score: '3-2' },
-      { p1: 'CipherLord', p2: 'LogicKnight', winner: 'CipherLord', score: '3-0' }
-    ],
-    semifinals: [
-      { p1: `${profile.username} (You)`, p2: 'ByteNinja', winner: profile.username, score: '3-2' },
-      { p1: 'SyntaxQueen', p2: 'CipherLord', winner: 'CipherLord', score: '3-1' }
-    ],
-    finals: [
-      { p1: `${profile.username} (You)`, p2: 'CipherLord', timeRemaining: '04:12 Live', status: 'IN PROGRESS' }
-    ]
-  };
-
+  // This screen previously showed a fully fabricated bracket — fictional
+  // opponent names, a fake "LIVE" timer, invented match scores — with no
+  // backend behind any of it. A tournament system that real is a genuine
+  // build (matchmaking, scheduling, a bracket persisted server-side), not
+  // something to fake in the meantime. Until that exists, be honest about
+  // it instead: no fabricated matches, but still point at the real
+  // competitive feature that exists today (Code Duels).
   return (
     <div className="container" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-      {/* Header Banner */}
       <div className="realm-card" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)', border: '1px solid var(--accent-primary)' }}>
         <div>
           <div style={{
@@ -32,108 +22,44 @@ export const Championship: React.FC = () => {
             fontSize: '11px', fontWeight: 700, padding: 'var(--space-1) var(--space-3)',
             borderRadius: 'var(--radius-full)', marginBottom: 'var(--space-2)', border: '1px solid var(--accent-primary)'
           }}>
-            <Crown size={14} /> Season 01 Championship
+            <Crown size={14} /> Championship
           </div>
-          <h1 style={{ fontSize: '24px', color: 'var(--text-main)', fontWeight: 700 }}>The Python Age Tournament</h1>
+          <h1 style={{ fontSize: '24px', color: 'var(--text-main)', fontWeight: 700 }}>Seasonal Tournament</h1>
           <div style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: 'var(--space-1)' }}>
-            Prize Pool: 50,000 Coins + Season 01 Legend Badge & Title
-          </div>
-        </div>
-
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Grand Finals Match</div>
-          <div style={{
-            fontSize: '24px', fontWeight: 700, color: 'var(--accent-primary)',
-            fontFamily: 'var(--font-mono)', marginTop: 'var(--space-1)',
-            display: 'flex', alignItems: 'center', gap: 'var(--space-2)'
-          }}>
-            <Timer size={20} /> 04:12 LIVE
+            Real bracketed tournaments are in development.
           </div>
         </div>
       </div>
 
-      {/* Bracket Tree Visualizer */}
-      <div className="realm-card" style={{ padding: 'var(--space-6)', overflowX: 'auto' }}>
-        <h3 style={{ fontSize: '16px', color: 'var(--text-main)', marginBottom: 'var(--space-6)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontWeight: 700 }}>
-          <Trophy size={18} color="var(--accent-primary)" /> Tournament Bracket
-        </h3>
-
-        <div style={{ display: 'flex', gap: 'var(--space-8)', minWidth: '800px' }}>
-          {/* Round 1: Qualifiers */}
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 'var(--space-4)' }}>
-              Round 1 (Qualifiers)
-            </div>
-            {bracketData.qualifiers.map((match, i) => (
-              <div key={i} style={{
-                background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
-                borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', marginBottom: 'var(--space-3)', fontSize: '13px'
-              }}>
-                <div className="flex-between" style={{ fontWeight: match.winner === match.p1 ? 700 : 500, color: match.winner === match.p1 ? 'var(--text-main)' : 'var(--text-muted)' }}>
-                  <span>{match.p1}</span>
-                  <span>{match.score.split('-')[0]}</span>
-                </div>
-                <div style={{ height: '1px', background: 'var(--border-subtle)', margin: 'var(--space-2) 0' }} />
-                <div className="flex-between" style={{ fontWeight: match.winner === match.p2 ? 700 : 500, color: match.winner === match.p2 ? 'var(--text-main)' : 'var(--text-muted)' }}>
-                  <span>{match.p2}</span>
-                  <span>{match.score.split('-')[1]}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Round 2: Semifinals */}
-          <div style={{ flex: 1, marginTop: 'var(--space-6)' }}>
-            <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 'var(--space-4)' }}>
-              Semifinals
-            </div>
-            {bracketData.semifinals.map((match, i) => (
-              <div key={i} style={{
-                background: 'var(--bg-elevated)', border: '1px solid var(--border-bright)',
-                borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', marginBottom: 'var(--space-5)', fontSize: '13px'
-              }}>
-                <div className="flex-between" style={{ fontWeight: 700, color: 'var(--text-main)' }}>
-                  <span>{match.p1}</span>
-                  <span>{match.score.split('-')[0]}</span>
-                </div>
-                <div style={{ height: '1px', background: 'var(--border-subtle)', margin: 'var(--space-2) 0' }} />
-                <div className="flex-between" style={{ color: 'var(--text-muted)' }}>
-                  <span>{match.p2}</span>
-                  <span>{match.score.split('-')[1]}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Grand Finals */}
-          <div style={{ flex: 1, marginTop: 'calc(var(--space-8) + var(--space-4))' }}>
-            <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--accent-primary)', textTransform: 'uppercase', marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
-              🔥 Grand Finals (Live)
-            </div>
-            <div className="realm-card" style={{ padding: 'var(--space-4)', border: '1px solid var(--accent-primary)', background: 'var(--bg-elevated)' }}>
-              <div className="flex-between" style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '14px' }}>
-                <span>{bracketData.finals[0].p1}</span>
-                <span style={{ color: 'var(--accent-primary)' }}>2</span>
-              </div>
-              <div style={{ height: '1px', background: 'var(--border-bright)', margin: 'var(--space-2) 0' }} />
-              <div className="flex-between" style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '14px' }}>
-                <span>{bracketData.finals[0].p2}</span>
-                <span>2</span>
-              </div>
-
-              <button
-                onClick={() => {
-                  triggerNotification('⚔️ Entering Season 01 Grand Finals Match against CipherLord!');
-                  setActiveTab('duel');
-                }}
-                className="btn-primary"
-                style={{ width: '100%', justifyContent: 'center', marginTop: 'var(--space-4)' }}
-              >
-                <Swords size={16} /> Enter Finals Match
-              </button>
-            </div>
-          </div>
+      <div className="realm-card" style={{ padding: 'var(--space-8)', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-4)' }}>
+        <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: '64px', height: '64px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Construction size={28} color="var(--text-muted)" />
         </div>
+        <div>
+          <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-main)', marginBottom: 'var(--space-2)' }}>
+            Championship mode is still being built
+          </h2>
+          <p style={{ fontSize: '14px', color: 'var(--text-muted)', maxWidth: '440px', lineHeight: 1.6 }}>
+            We want tournament brackets, matchmaking, and prizes to be real when they ship —
+            not placeholder matches. In the meantime, Code Duels is the real competitive mode
+            available today.
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            triggerNotification('⚔️ Entering the Duel Arena!');
+            setActiveTab('duel');
+          }}
+          className="btn-primary"
+          style={{ marginTop: 'var(--space-2)' }}
+        >
+          <Swords size={16} /> Go to Code Duels
+        </button>
+      </div>
+
+      <div className="realm-card" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', color: 'var(--text-muted)', fontSize: '13px' }}>
+        <Trophy size={18} />
+        <span>Want to see who's actually winning right now? Check the <button onClick={() => setActiveTab('leaderboards')} style={{ background: 'none', border: 'none', color: 'var(--accent-primary)', cursor: 'pointer', fontWeight: 600, padding: 0, font: 'inherit' }}>global leaderboard</button> — that one's real.</span>
       </div>
     </div>
   );

@@ -87,6 +87,8 @@ async def get_admin_analytics(
     res_bugs = await db.execute(
         select(func.count(UserFeedback.id)).where(UserFeedback.status == "pending")
     )
+    pending_bugs = res_bugs.scalar() or 0
+
     res_gen_today = await db.execute(
         select(func.count(Challenge.id)).where(Challenge.created_at >= today_start)
     )

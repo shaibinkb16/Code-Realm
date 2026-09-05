@@ -23,7 +23,8 @@ class AIMentorChatRequest(BaseModel):
 @router.post("/chat")
 async def general_ai_mentor_chat(
     req: AIMentorChatRequest,
-    current_user: Optional[User] = Depends(get_optional_user)
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """General AI Tutor chat endpoint for AI Companion Modal & Daily Briefings."""
     skill = req.skill_rating or 1000
@@ -33,7 +34,9 @@ async def general_ai_mentor_chat(
     response = await ai_mentor_service.chat_with_mentor(
         message=req.message,
         mode=req.mode,
-        user_skill_rating=skill
+        user_skill_rating=skill,
+        db=db,
+        user_id=current_user.id if current_user else None,
     )
     return response
 
@@ -65,6 +68,8 @@ async def chat_with_ai_mentor(
         challenge_id=req.challenge_id,
         mode=req.mode,
         user_skill_rating=skill,
-        recent_errors=recent_errors
+        recent_errors=recent_errors,
+        db=db,
+        user_id=current_user.id if current_user else None,
     )
     return response

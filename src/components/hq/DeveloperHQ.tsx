@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useGame } from '../../context/GameContext';
 import { api } from '../../services/api';
+import type { SkillMasteryResponse, DailyMissionResponse } from '../../services/api';
 import { AchievementGallery } from './AchievementGallery';
 import { FormattedText } from '../ui/FormattedText';
 import type { Achievement } from '../../types/game';
 import {
   Layers, Sparkles, Flame, Award,
   ArrowUpCircle, Loader, RefreshCw, Bot,
-  Zap, Building, Brain
+  Zap, Building, Brain, TrendingUp, Target, CheckCircle2, Circle
 } from 'lucide-react';
 
 const HQ_TIERS = [
@@ -35,32 +36,47 @@ function GlobeIcon(props: any) {
   );
 }
 
-function computeAchievements(profile: ReturnType<typeof useGame>['profile']): Achievement[] {
-  const completedCount = profile.completedNodeIds?.length || 0;
-  const hasDefeatedBoss = profile.completedNodeIds?.some(id => id.includes('boss')) || false;
-  const buildingCount = profile.hq?.unlockedBuildings?.length || 0;
-
-  return [
-    { id: 'first-blood', title: 'First Blood', description: 'Solve your first programming challenge.', category: 'Learning', icon: 'Award', xpReward: 100, coinReward: 50, unlocked: completedCount >= 1, progress: Math.min(1, completedCount), maxProgress: 1 },
-    { id: 'unstoppable', title: 'Unstoppable', description: 'Complete 10 challenges.', category: 'Speed', icon: 'Zap', xpReward: 300, coinReward: 150, unlocked: completedCount >= 10, progress: Math.min(10, completedCount), maxProgress: 10 },
-    { id: 'streak-warrior', title: 'Streak Warrior', description: 'Maintain a 7-day coding streak.', category: 'Learning', icon: 'Flame', xpReward: 400, coinReward: 200, unlocked: (profile.streak || 0) >= 7, progress: Math.min(7, profile.streak || 0), maxProgress: 7 },
-    { id: 'xp-hunter', title: 'XP Hunter', description: 'Earn 5,000 total XP.', category: 'Learning', icon: 'Award', xpReward: 500, coinReward: 250, unlocked: (profile.xp || 0) >= 5000, progress: Math.min(5000, profile.xp || 0), maxProgress: 5000 },
-    { id: 'star-collector', title: 'Star Collector', description: 'Earn 30 stars across all challenges.', category: 'Learning', icon: 'Award', xpReward: 600, coinReward: 300, unlocked: (profile.stars || 0) >= 30, progress: Math.min(30, profile.stars || 0), maxProgress: 30 },
-    { id: 'dragon-slayer', title: 'Dragon Slayer', description: 'Defeat a Boss in multi-phase boss fight combat.', category: 'Competition', icon: 'Flame', xpReward: 1000, coinReward: 500, unlocked: hasDefeatedBoss, progress: hasDefeatedBoss ? 1 : 0, maxProgress: 1 },
-    { id: 'coin-hoarder', title: 'Coin Hoarder', description: 'Accumulate 5,000 coins.', category: 'Projects', icon: 'Building2', xpReward: 400, coinReward: 0, unlocked: (profile.coins || 0) >= 5000, progress: Math.min(5000, profile.coins || 0), maxProgress: 5000 },
-    { id: 'code-architect', title: 'Tech Architect', description: 'Unlock 3 buildings in your Developer HQ.', category: 'Projects', icon: 'Building2', xpReward: 800, coinReward: 400, unlocked: buildingCount >= 3, progress: Math.min(3, buildingCount), maxProgress: 3 },
-    { id: 'python-master', title: 'Python Master', description: 'Reach 900+ Python skill rating.', category: 'Learning', icon: 'Brain', xpReward: 700, coinReward: 350, unlocked: (profile.skills?.python || 0) >= 900, progress: Math.min(900, profile.skills?.python || 0), maxProgress: 900 },
-    { id: 'level-10', title: 'Seasoned Coder', description: 'Reach Level 10.', category: 'Learning', icon: 'Award', xpReward: 1000, coinReward: 500, unlocked: (profile.level || 0) >= 10, progress: Math.min(10, profile.level || 0), maxProgress: 10 },
-  ];
-}
-
 export const DeveloperHQ: React.FC = () => {
   const { profile, setProfile, triggerNotification } = useGame() as any;
-  const [activeSubTab, setActiveSubTab] = useState<'workspace' | 'pet' | 'achievements' | 'briefing'>('workspace');
+  const [activeSubTab, setActiveSubTab] = useState<'workspace' | 'pet' | 'achievements' | 'skills' | 'briefing'>('workspace');
   const [briefing, setBriefing] = useState('');
   const [isLoadingBriefing, setIsLoadingBriefing] = useState(false);
+  const [mastery, setMastery] = useState<SkillMasteryResponse | null>(null);
+  const [isLoadingMastery, setIsLoadingMastery] = useState(false);
+  const [dailyMission, setDailyMission] = useState<DailyMissionResponse | null>(null);
+  const [isClaimingMission, setIsClaimingMission] = useState(false);
+  const [weeklyMission, setWeeklyMission] = useState<DailyMissionResponse | null>(null);
+  const [isClaimingWeeklyMission, setIsClaimingWeeklyMission] = useState(false);
 
-  const achievements: Achievement[] = useMemo(() => computeAchievements(profile), [profile]);
+  // Server-authoritative achievement list — replaces the old computeAchievements(),
+  // which derived a separate 10-achievement set from local profile state with
+  // no backend record. That list could show "unlocked" for something the
+  // server never actually granted XP/coins for.
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [isLoadingAchievements, setIsLoadingAchievements] = useState(false);
+
+  const fetchAchievements = async () => {
+    setIsLoadingAchievements(true);
+    try {
+      const res = await api.getAchievements();
+      if (res?.achievements) {
+        setAchievements(res.achievements.map(a => ({
+          id: a.id,
+          title: a.title,
+          description: a.description,
+          category: a.category,
+          icon: a.icon_name,
+          xpReward: a.xp_reward,
+          coinReward: a.coin_reward,
+          unlocked: a.unlocked,
+          progress: a.progress,
+          maxProgress: a.target,
+        })));
+      }
+    } finally {
+      setIsLoadingAchievements(false);
+    }
+  };
 
   const petMood = useMemo(() => {
     if (profile.streak >= 14) return { label: 'Legendary', color: 'var(--success)' };
@@ -167,9 +183,78 @@ Give me: 1 motivational opener, 2 specific daily missions targeting my weakest s
     }
   };
 
+  const fetchMastery = async () => {
+    setIsLoadingMastery(true);
+    try {
+      const data = await api.getSkillMastery();
+      setMastery(data);
+    } finally {
+      setIsLoadingMastery(false);
+    }
+  };
+
   useEffect(() => {
     if (activeSubTab === 'briefing' && !briefing) fetchBriefing();
+    if (activeSubTab === 'skills' && !mastery) fetchMastery();
+    if (activeSubTab === 'achievements' && achievements.length === 0) fetchAchievements();
   }, [activeSubTab]);
+
+  useEffect(() => {
+    api.getDailyMission().then(setDailyMission);
+    api.getWeeklyMission().then(setWeeklyMission);
+  }, []);
+
+  const applyProfileRefresh = async () => {
+    // Re-fetch full profile rather than patching xp/coins locally, since a
+    // level-up needs the server's recalculated level/nextLevelXp too.
+    const profileData = await api.getUserProfile();
+    const p = profileData?.profile;
+    if (p) {
+      setProfile((prev: any) => ({
+        ...prev,
+        level: p.level,
+        xp: p.xp,
+        nextLevelXp: p.next_level_xp,
+        coins: p.coins,
+      }));
+    }
+  };
+
+  const handleClaimWeeklyMission = async () => {
+    setIsClaimingWeeklyMission(true);
+    try {
+      const res = await api.claimWeeklyMission();
+      if (res?.status === 'CLAIMED') {
+        triggerNotification(`Weekly mission complete! +${res.xp} XP, +${res.coins} coins`);
+        setWeeklyMission(prev => prev ? { ...prev, claimed: true } : prev);
+        await applyProfileRefresh();
+      } else if (res?.status === 'ALREADY_CLAIMED') {
+        setWeeklyMission(prev => prev ? { ...prev, claimed: true } : prev);
+      } else {
+        triggerNotification('Complete all three tasks before claiming.');
+      }
+    } finally {
+      setIsClaimingWeeklyMission(false);
+    }
+  };
+
+  const handleClaimMission = async () => {
+    setIsClaimingMission(true);
+    try {
+      const res = await api.claimDailyMission();
+      if (res?.status === 'CLAIMED') {
+        triggerNotification(`Daily mission complete! +${res.xp} XP, +${res.coins} coins`);
+        setDailyMission(prev => prev ? { ...prev, claimed: true } : prev);
+        await applyProfileRefresh();
+      } else if (res?.status === 'ALREADY_CLAIMED') {
+        setDailyMission(prev => prev ? { ...prev, claimed: true } : prev);
+      } else {
+        triggerNotification('Complete all three tasks before claiming.');
+      }
+    } finally {
+      setIsClaimingMission(false);
+    }
+  };
 
   const tabStyle = (id: string): React.CSSProperties => ({
     background: activeSubTab === id ? 'var(--bg-elevated)' : 'transparent',
@@ -235,6 +320,7 @@ Give me: 1 motivational opener, 2 specific daily missions targeting my weakest s
         <button onClick={() => setActiveSubTab('workspace')} style={tabStyle('workspace')}><Layers size={16} /> Workspace</button>
         <button onClick={() => setActiveSubTab('pet')} style={tabStyle('pet')}><Flame size={16} /> Companion</button>
         <button onClick={() => setActiveSubTab('achievements')} style={tabStyle('achievements')}><Award size={16} /> Achievements</button>
+        <button onClick={() => setActiveSubTab('skills')} style={tabStyle('skills')}><TrendingUp size={16} /> Skills</button>
         <button onClick={() => setActiveSubTab('briefing')} style={tabStyle('briefing')}><Bot size={16} /> Briefing</button>
       </div>
 
@@ -242,6 +328,24 @@ Give me: 1 motivational opener, 2 specific daily missions targeting my weakest s
         {/* ── WORKSPACE TAB ── */}
         {activeSubTab === 'workspace' && (
           <div className="grid-responsive">
+            {dailyMission && (
+              <MissionCard
+                title="Today's Mission"
+                mission={dailyMission}
+                isClaiming={isClaimingMission}
+                onClaim={handleClaimMission}
+              />
+            )}
+
+            {weeklyMission && (
+              <MissionCard
+                title="This Week's Mission"
+                mission={weeklyMission}
+                isClaiming={isClaimingWeeklyMission}
+                onClaim={handleClaimWeeklyMission}
+              />
+            )}
+
             <div className="realm-card">
               <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-main)', marginBottom: 'var(--space-4)' }}>HQ Progression</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
@@ -356,10 +460,74 @@ Give me: 1 motivational opener, 2 specific daily missions targeting my weakest s
                 <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{unlockedCount} of {achievements.length} unlocked</div>
               </div>
               <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', fontSize: '13px', fontWeight: 600, color: 'var(--text-main)' }}>
-                {Math.round((unlockedCount / achievements.length) * 100)}% Complete
+                {achievements.length > 0 ? Math.round((unlockedCount / achievements.length) * 100) : 0}% Complete
               </div>
             </div>
-            <AchievementGallery achievements={achievements} />
+            {isLoadingAchievements ? (
+              <div className="flex-center" style={{ gap: 'var(--space-2)', color: 'var(--text-muted)', padding: 'var(--space-4)' }}>
+                <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> Loading trophies...
+                <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+              </div>
+            ) : (
+              <AchievementGallery achievements={achievements} />
+            )}
+          </div>
+        )}
+
+        {/* ── SKILLS TAB ── */}
+        {activeSubTab === 'skills' && (
+          <div className="realm-card">
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)', gap: 'var(--space-3)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                <TrendingUp size={24} color="var(--text-main)" />
+                <div>
+                  <h2 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-main)' }}>Skill Mastery</h2>
+                  <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Tracked automatically from your graded submissions</div>
+                </div>
+              </div>
+              <button onClick={fetchMastery} className="btn-secondary">
+                <RefreshCw size={14} /> Refresh
+              </button>
+            </div>
+
+            {isLoadingMastery ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--text-muted)', padding: 'var(--space-4)' }}>
+                <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> Loading skill breakdown...
+                <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+              </div>
+            ) : !mastery || (mastery.languages.length === 0 && mastery.topics.length === 0) ? (
+              <div style={{ color: 'var(--text-muted)', fontSize: '13px', padding: 'var(--space-4)', textAlign: 'center' }}>
+                No graded submissions yet — solve a few challenges and your per-language and per-skill mastery will appear here.
+              </div>
+            ) : (
+              <div className="grid-responsive">
+                {mastery.languages.length > 0 && (
+                  <div>
+                    <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 'var(--space-3)' }}>By Language</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                      {mastery.languages.map(entry => (
+                        <MasteryBar key={entry.name} entry={entry} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {mastery.topics.length > 0 && (
+                  <div>
+                    <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 'var(--space-3)' }}>By Challenge Type</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                      {mastery.topics.map(entry => (
+                        <MasteryBar key={entry.name} entry={entry} />
+                      ))}
+                    </div>
+                    {mastery.weakest_topic && (
+                      <div style={{ marginTop: 'var(--space-3)', fontSize: '12px', color: 'var(--text-muted)' }}>
+                        Weakest area: <strong style={{ color: 'var(--text-main)' }}>{mastery.weakest_topic}</strong> — worth practicing next.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -391,6 +559,61 @@ Give me: 1 motivational opener, 2 specific daily missions targeting my weakest s
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+};
+
+const MissionCard: React.FC<{
+  title: string;
+  mission: DailyMissionResponse;
+  isClaiming: boolean;
+  onClaim: () => void;
+}> = ({ title, mission, isClaiming, onClaim }) => (
+  <div className="realm-card">
+    <div className="flex-between" style={{ marginBottom: 'var(--space-3)' }}>
+      <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+        <Target size={16} /> {title}
+      </h3>
+      {mission.claimed && (
+        <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--success)', textTransform: 'uppercase' }}>Claimed</span>
+      )}
+    </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
+      {mission.tasks.map(task => (
+        <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: '13px' }}>
+          {task.completed
+            ? <CheckCircle2 size={16} color="var(--success)" />
+            : <Circle size={16} color="var(--text-muted)" />}
+          <span style={{ color: task.completed ? 'var(--text-main)' : 'var(--text-muted)', flex: 1 }}>{task.label}</span>
+          <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>{task.progress}/{task.target}</span>
+        </div>
+      ))}
+    </div>
+    <button
+      className="btn-primary"
+      style={{ width: '100%', justifyContent: 'center' }}
+      disabled={!mission.all_completed || mission.claimed || isClaiming}
+      onClick={onClaim}
+    >
+      {mission.claimed
+        ? 'Reward Claimed'
+        : `Claim +${mission.bonus_xp} XP, +${mission.bonus_coins} Coins`}
+    </button>
+  </div>
+);
+
+const MasteryBar: React.FC<{ entry: { name: string; mastery_percentage: number; skill_rating: number } }> = ({ entry }) => {
+  const pct = Math.max(0, Math.min(100, entry.mastery_percentage));
+  const color = pct >= 75 ? 'var(--success)' : pct >= 40 ? 'var(--warning)' : 'var(--text-muted)';
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
+        <span style={{ color: 'var(--text-main)', fontWeight: 600 }}>{entry.name}</span>
+        <span style={{ color: 'var(--text-muted)' }}>{Math.round(pct)}% · {entry.skill_rating} rating</span>
+      </div>
+      <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-full, 999px)', height: '8px', overflow: 'hidden' }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: color, transition: 'width 0.4s ease' }} />
       </div>
     </div>
   );

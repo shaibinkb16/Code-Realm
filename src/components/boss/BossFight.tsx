@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
 import { API_BASE_URL } from '../../services/api';
 import confetti from 'canvas-confetti';
+import Editor from '@monaco-editor/react';
 import { Flame, Zap, ArrowLeft, Trophy, Sparkles, Loader, CheckCircle, XCircle, Skull, RotateCcw } from 'lucide-react';
 
 const API_BASE = API_BASE_URL;
@@ -36,7 +37,7 @@ const BOSS_MAX_HP = 3000;
 const PHASE_DAMAGE = 1000;
 
 export const BossFight: React.FC = () => {
-  const { setActiveTab, completeChallenge, triggerNotification, activeNode, profile } = useGame();
+  const { setActiveTab, completeChallenge, triggerNotification, activeNode, profile, theme } = useGame();
 
   const [phases, setPhases] = useState<BossChallenge[]>([]);
   const [currentPhaseIndex, setCurrentPhaseIndex] = useState(0);
@@ -106,9 +107,19 @@ export const BossFight: React.FC = () => {
     setTestResults([]);
 
     try {
+      const token = localStorage.getItem('coderealm_token');
+      if (!token) {
+        setExecutionOutput('❌ Please log in to fight this boss.');
+        setIsExecuting(false);
+        return;
+      }
+
       const resp = await fetch(`${API_BASE}/execute/run`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify({
           code: userCode,
           language: 'python',
@@ -120,6 +131,8 @@ export const BossFight: React.FC = () => {
           })),
         }),
       });
+
+      if (resp.status === 401) throw new Error('Your session expired. Please log in again.');
 
       const result = await resp.json();
       setTestResults(result.test_results || []);
@@ -153,8 +166,8 @@ export const BossFight: React.FC = () => {
           triggerNotification('You were defeated by the Boss! Regroup and retry!');
         }
       }
-    } catch {
-      setExecutionOutput('❌ Could not reach execution backend.');
+    } catch (err) {
+      setExecutionOutput(`❌ ${err instanceof Error ? err.message : 'Could not reach execution backend.'}`);
     } finally {
       setIsExecuting(false);
     }
@@ -291,17 +304,22 @@ export const BossFight: React.FC = () => {
 
           {/* Code Input */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-            <textarea
-              value={userCode}
-              onChange={(e) => setUserCode(e.target.value)}
-              spellCheck={false}
-              style={{
-                width: '100%', height: '300px', background: 'var(--bg-elevated)',
-                border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)',
-                padding: 'var(--space-4)', color: 'var(--text-main)', fontFamily: 'var(--font-mono)',
-                fontSize: '14px', outline: 'none', resize: 'vertical'
-              }}
-            />
+            <div style={{ height: '300px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+              <Editor
+                height="100%"
+                language="python"
+                theme={theme === 'dark' ? 'vs-dark' : 'light'}
+                value={userCode}
+                onChange={(value) => setUserCode(value || '')}
+                options={{
+                  minimap: { enabled: false },
+                  fontSize: 14,
+                  fontFamily: 'var(--font-mono)',
+                  padding: { top: 16, bottom: 16 },
+                  scrollBeyondLastLine: false,
+                }}
+              />
+            </div>
             <button
               onClick={handleAttackBoss}
               disabled={isExecuting}

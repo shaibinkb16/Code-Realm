@@ -3,7 +3,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from app.core.database import get_db
 from app.core.redis import redis_manager
-from app.core.mongo import verify_mongo_connection
 from app.core.supabase import get_supabase_client
 
 router = APIRouter()
@@ -15,10 +14,17 @@ async def liveness_health_check():
 
 @router.get("/ready", status_code=status.HTTP_200_OK)
 async def readiness_health_check(db: AsyncSession = Depends(get_db)):
-    """Readiness probe: verifies database, Supabase, MongoDB, and Redis dependency health."""
+    """
+    Readiness probe: verifies database, Supabase, and Redis dependency health.
+
+    Previously also pinged a MongoDB "fallback" connection, but no route or
+    service anywhere in the backend ever read or wrote to it — it was
+    connected and health-checked without ever being a real dependency.
+    Removed rather than left as permanent dead weight; see git history if a
+    real use for a secondary datastore comes up later.
+    """
     db_healthy = False
     redis_healthy = False
-    mongo_healthy = False
     supabase_healthy = get_supabase_client() is not None
 
     try:
@@ -26,11 +32,6 @@ async def readiness_health_check(db: AsyncSession = Depends(get_db)):
         db_healthy = result.scalar() == 1
     except Exception:
         db_healthy = False
-
-    try:
-        mongo_healthy = await verify_mongo_connection()
-    except Exception:
-        mongo_healthy = False
 
     if redis_manager.redis_client:
         try:
@@ -44,17 +45,15 @@ async def readiness_health_check(db: AsyncSession = Depends(get_db)):
             "dependencies": {
                 "database": "connected" if db_healthy else "disconnected",
                 "supabase_client": "connected" if supabase_healthy else "standby",
-                "mongodb_fallback": "connected" if mongo_healthy else "standby",
                 "redis": "connected" if redis_healthy else "degraded"
             }
         }
-    
+
     return {
         "status": "unhealthy",
         "dependencies": {
             "database": "disconnected",
             "supabase_client": "connected" if supabase_healthy else "standby",
-            "mongodb_fallback": "connected" if mongo_healthy else "standby",
             "redis": "connected" if redis_healthy else "disconnected"
         }
     }

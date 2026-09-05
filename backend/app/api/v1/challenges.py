@@ -358,3 +358,27 @@ async def get_challenge_feedback(req: FeedbackRequest):
         skill_rating=req.skill_rating,
     )
 
+
+# ─────────────────────────────────────────────────────────
+# POST /challenges/review
+# Structured, scored code review (correctness/performance/readability/
+# security/maintainability), a richer companion to the free-text /feedback
+# endpoint above. Optional auth — logged-in requests get their review tied
+# to their account for future cost tracking, anonymous requests still work.
+# ─────────────────────────────────────────────────────────
+@router.post("/review")
+async def get_ai_code_review(
+    req: FeedbackRequest,
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await ai_mentor_service.generate_code_review(
+        code=req.code,
+        challenge_title=req.challenge_title,
+        challenge_description=req.challenge_description,
+        test_results=req.test_results,
+        skill_rating=req.skill_rating,
+        db=db,
+        user_id=current_user.id if current_user else None,
+    )
+

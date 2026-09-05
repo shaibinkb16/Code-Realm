@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../../context/GameContext';
-import { API_BASE_URL } from '../../services/api';
+import { api, API_BASE_URL } from '../../services/api';
+import type { GhostPaceResponse } from '../../services/api';
+import Editor from '@monaco-editor/react';
 import { Timer, Zap, Trophy, ArrowLeft, Bot, Loader, CheckCircle, XCircle, RotateCcw, Swords } from 'lucide-react';
 import { AIOpponentsSelector, aiBots, type AIBot } from './AIOpponentsSelector';
 
@@ -31,7 +33,7 @@ interface TestResult {
 }
 
 export const CodeDuel: React.FC = () => {
-  const { profile, setActiveTab, triggerNotification, completeChallenge } = useGame();
+  const { profile, setProfile, setActiveTab, triggerNotification, theme } = useGame();
 
   const [challenge, setChallenge] = useState<DuelChallenge | null>(null);
   const [isLoadingChallenge, setIsLoadingChallenge] = useState(true);
@@ -48,6 +50,8 @@ export const CodeDuel: React.FC = () => {
   const [xpEarned, setXpEarned] = useState(0);
   const [roundIndex, setRoundIndex] = useState(1);
   const [currentOpponent, setCurrentOpponent] = useState<AIBot>(aiBots[2]);
+  const [ghostPace, setGhostPace] = useState<GhostPaceResponse | null>(null);
+  const hasRealGhost = !!ghostPace && ghostPace.sample_size >= 3;
 
   const loadDuelChallenge = async (round: number, opponent?: AIBot) => {
     setIsLoadingChallenge(true);
@@ -60,6 +64,14 @@ export const CodeDuel: React.FC = () => {
     setOutput('');
     const targetOpponent = opponent || currentOpponent;
     if (opponent) setCurrentOpponent(opponent);
+
+    // Real ghost pace: how long actual players at this rating took to solve
+    // a comparable problem, from code_submissions.solve_time_seconds. When
+    // there isn't enough real data yet (sample_size < 3), hasRealGhost stays
+    // false and the UI falls back to a clearly-labeled simulated pace instead
+    // of pretending randomness is a real opponent.
+    setGhostPace(null);
+    api.getGhostPace(targetOpponent.rating || profile.rankRating || 905).then(setGhostPace);
 
     try {
       const params = new URLSearchParams({
@@ -125,9 +137,17 @@ export const CodeDuel: React.FC = () => {
         }
         return prev - 1;
       });
-      setOpponentProgress(prev => {
-        const boost = Math.random() > 0.55 ? Math.random() * 4 : 0;
-        return Math.min(98, prev + boost);
+      const elapsed = 150 - secondsLeft;
+      setOpponentProgress(() => {
+        if (hasRealGhost && ghostPace) {
+          // Deterministic: races the real median solve time of players at
+          // this rating band, not a fabricated random walk.
+          return Math.min(98, (elapsed / ghostPace.median_seconds) * 100);
+        }
+        // Not enough real data at this rating yet — a labeled simulated pace
+        // (see the "Practice Pace" copy below) rather than a specific
+        // opponent claim.
+        return Math.min(98, (elapsed / 90) * 100);
       });
     }, 1000);
     return () => clearInterval(timer);
@@ -143,12 +163,31 @@ export const CodeDuel: React.FC = () => {
     setOutput('⚙️ Executing against test cases...');
 
     try {
-      const resp = await fetch(`${API_BASE}/execute/run`, {
+      const token = localStorage.getItem('coderealm_token');
+      if (!token) {
+        setOutput('❌ Please log in to duel.');
+        setIsExecuting(false);
+        return;
+      }
+
+      // Uses /execute/submit rather than /execute/run: this both applies
+      // real server-side rewards (via RewardService) and, by sending the
+      // actual elapsed countdown time, contributes a genuine data point to
+      // the ghost-pace pool other players will race against — that pool is
+      // otherwise permanently empty, since nothing else records solve time.
+      const elapsedSeconds = 150 - secondsLeft;
+      const duelChallengeId = (challenge as any)?.id || `duel-${currentOpponent.id}-r${roundIndex}`;
+      const resp = await fetch(`${API_BASE}/execute/submit`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify({
+          challenge_id: duelChallengeId,
           code,
           language: 'python',
+          solve_time_seconds: elapsedSeconds,
           test_cases: challenge.testCases.map(tc => ({
             id: tc.id,
             description: tc.description,
@@ -157,6 +196,8 @@ export const CodeDuel: React.FC = () => {
           })),
         }),
       });
+
+      if (resp.status === 401) throw new Error('Your session expired. Please log in again.');
 
       const result = await resp.json();
       setTestResults(result.test_results || []);
@@ -168,18 +209,38 @@ export const CodeDuel: React.FC = () => {
       if (result.all_passed) {
         setDuelFinished(true);
         setPlayerWon(true);
-        const elo = opponentProgress < 80 ? 25 : 15;
-        const xp = challenge.xpReward;
-        setEloChange(elo);
+        // Rewards and Elo were already applied server-side by RewardService
+        // inside /execute/submit above — read the authoritative amounts back
+        // rather than computing a second, client-side estimate (the previous
+        // version additionally called completeChallenge(), which hit
+        // /user/progress and granted a second, separate reward for the same
+        // win).
+        const xp = result.xp_earned ?? challenge.xpReward;
+        setEloChange(opponentProgress < 80 ? 25 : 15);
         setXpEarned(xp);
-        completeChallenge(`duel-round-${roundIndex}`, 3, xp, challenge.coinReward);
-        triggerNotification(`Duel Victory! +${elo} ELO | +${xp} XP`);
+        triggerNotification(`Duel Victory! +${xp} XP`);
         setOutput(`✅ All tests passed — You win Round ${roundIndex}!`);
+
+        api.getUserProfile().then(profileData => {
+          const p = profileData?.profile;
+          if (!p) return;
+          setProfile(prev => ({
+            ...prev,
+            level: p.level,
+            xp: p.xp,
+            nextLevelXp: p.next_level_xp,
+            coins: p.coins,
+            stars: p.stars,
+            streak: p.streak,
+            rank: p.rank,
+            rankRating: p.rank_rating,
+          }));
+        }).catch(() => {});
       } else {
         setOutput(`${passed}/${total} tests passed. Check Your Output below.`);
       }
-    } catch {
-      setOutput('❌ Could not reach execution backend.');
+    } catch (err) {
+      setOutput(`❌ ${err instanceof Error ? err.message : 'Could not reach execution backend.'}`);
     } finally {
       setIsExecuting(false);
     }
@@ -240,9 +301,13 @@ export const CodeDuel: React.FC = () => {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', textAlign: 'right' }}>
           <div>
-            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>AI Opponent</div>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              {hasRealGhost ? 'Ghost Race' : 'Practice Pace'}
+            </div>
             <h3 style={{ fontSize: '18px', color: 'var(--text-main)', fontWeight: 700 }}>{currentOpponent.name}</h3>
-            <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{currentOpponent.rating} ELO</div>
+            <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+              {currentOpponent.rating} ELO band{hasRealGhost ? ` · ${ghostPace!.sample_size} real solves` : ' · estimated pace'}
+            </div>
           </div>
           <div style={{ width: '52px', height: '52px', borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px' }}>
             {currentOpponent.avatar}
@@ -254,7 +319,7 @@ export const CodeDuel: React.FC = () => {
       <div className="realm-card" style={{ padding: 'var(--space-4)' }}>
         {[
           { label: 'Your Progress', pct: playerProgress, color: 'var(--success)' },
-          { label: `${currentOpponent.name} Progress`, pct: opponentProgress, color: 'var(--warning)' },
+          { label: hasRealGhost ? `${currentOpponent.name} (real player pace)` : `${currentOpponent.name} (estimated)`, pct: opponentProgress, color: 'var(--warning)' },
         ].map(({ label, pct, color }) => (
           <div key={label} style={{ marginBottom: 'var(--space-3)' }}>
             <div className="flex-between" style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 'var(--space-1)' }}>
@@ -316,16 +381,22 @@ export const CodeDuel: React.FC = () => {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-            <textarea
-              value={code}
-              onChange={e => setCode(e.target.value)}
-              spellCheck={false}
-              style={{
-                width: '100%', height: '300px', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
-                borderRadius: 'var(--radius-md)', padding: 'var(--space-4)', color: 'var(--text-main)',
-                fontFamily: 'var(--font-mono)', fontSize: '14px', outline: 'none', resize: 'vertical'
-              }}
-            />
+            <div style={{ height: '300px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+              <Editor
+                height="100%"
+                language="python"
+                theme={theme === 'dark' ? 'vs-dark' : 'light'}
+                value={code}
+                onChange={(value) => setCode(value || '')}
+                options={{
+                  minimap: { enabled: false },
+                  fontSize: 14,
+                  fontFamily: 'var(--font-mono)',
+                  padding: { top: 16, bottom: 16 },
+                  scrollBeyondLastLine: false,
+                }}
+              />
+            </div>
             <button onClick={handleSubmitDuel} disabled={isExecuting} className="btn-primary" style={{ justifyContent: 'center', padding: 'var(--space-3)' }}>
               {isExecuting ? <><Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> Running...</> : <><Zap size={16} fill="currentColor" /> Submit Solution</>}
             </button>

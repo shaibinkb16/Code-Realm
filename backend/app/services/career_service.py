@@ -1,20 +1,22 @@
 import json
+from typing import Optional
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.logging import logger
-from app.core.llm_client import call_llm_with_fallback
+from app.services.structured_llm import generate_structured
+from app.schemas.llm_structured import (
+    LLMCareerRecommendations,
+    LLMSprintTickets,
+    LLMInterviewQuestion,
+    LLMInterviewEvaluation,
+)
 
 
 class CareerService:
 
     @staticmethod
-    async def _call_gemini(system_prompt: str, user_prompt: str) -> str:
-        """Calls multi-provider LLM service with primary Gemini and automatic Groq fallback."""
-        return await call_llm_with_fallback(system_prompt, user_prompt, json_mode=True)
-
-
-    @staticmethod
     async def generate_career_recommendations(
-        skill_ratings: dict, rank_rating: int
+        skill_ratings: dict, rank_rating: int, db: Optional[AsyncSession] = None
     ) -> dict:
         """Gemini generates 4 personalized career paths based on the user's actual skill ratings."""
         system_prompt = (
@@ -51,9 +53,11 @@ Rules:
 - Skills listed should reflect what they already know + what they need to learn
 """
         try:
-            raw = await CareerService._call_gemini(system_prompt, user_prompt)
-            data = json.loads(raw)
-            return {"status": "SUCCESS", "paths": data["paths"]}
+            validated = await generate_structured(
+                system_prompt, user_prompt, schema=LLMCareerRecommendations,
+                feature="career_recommend", db=db,
+            )
+            return {"status": "SUCCESS", "paths": [p.model_dump() for p in validated.paths]}
         except Exception as e:
             logger.error(f"Career generation error: {e}")
             return {
@@ -67,7 +71,7 @@ Rules:
             }
 
     @staticmethod
-    async def generate_sprint_tickets(skill_ratings: dict) -> dict:
+    async def generate_sprint_tickets(skill_ratings: dict, db: Optional[AsyncSession] = None) -> dict:
         """Gemini generates realistic sprint tickets based on the user's weakest skills."""
         weakest = sorted(skill_ratings.items(), key=lambda x: x[1])[:3]
         weak_skills = [k for k, v in weakest]
@@ -99,15 +103,17 @@ Make the tickets realistic engineering tasks (bug fixes, features, refactors).
 Vary the priorities. XP rewards: Critical=300, High=200, Medium=150.
 """
         try:
-            raw = await CareerService._call_gemini(system_prompt, user_prompt)
-            data = json.loads(raw)
-            return {"status": "SUCCESS", "tickets": data["tickets"]}
+            validated = await generate_structured(
+                system_prompt, user_prompt, schema=LLMSprintTickets,
+                feature="sprint_tickets", db=db,
+            )
+            return {"status": "SUCCESS", "tickets": [t.model_dump() for t in validated.tickets]}
         except Exception as e:
             logger.error(f"Sprint ticket generation error: {e}")
             return {"status": "FALLBACK", "tickets": []}
 
     @staticmethod
-    async def generate_interview_question(skill_ratings: dict) -> dict:
+    async def generate_interview_question(skill_ratings: dict, db: Optional[AsyncSession] = None) -> dict:
         """Generates a technical interview question targeting the user's growth areas."""
         weakest_skill = min(skill_ratings, key=skill_ratings.get)
         system_prompt = (
@@ -128,8 +134,11 @@ Return:
 }}
 """
         try:
-            raw = await CareerService._call_gemini(system_prompt, user_prompt)
-            return {"status": "SUCCESS", **json.loads(raw)}
+            validated = await generate_structured(
+                system_prompt, user_prompt, schema=LLMInterviewQuestion,
+                feature="interview_question", db=db,
+            )
+            return {"status": "SUCCESS", **validated.model_dump()}
         except Exception as e:
             logger.error(f"Interview question generation error: {e}")
             return {
@@ -141,7 +150,9 @@ Return:
             }
 
     @staticmethod
-    async def evaluate_interview_answer(question: str, answer: str, skill: str) -> dict:
+    async def evaluate_interview_answer(
+        question: str, answer: str, skill: str, db: Optional[AsyncSession] = None
+    ) -> dict:
         """Gemini evaluates the user's interview answer and returns structured scores."""
         system_prompt = (
             "You are a senior software engineering interviewer. "
@@ -166,8 +177,11 @@ Return:
 }}
 """
         try:
-            raw = await CareerService._call_gemini(system_prompt, user_prompt)
-            return {"status": "SUCCESS", **json.loads(raw)}
+            validated = await generate_structured(
+                system_prompt, user_prompt, schema=LLMInterviewEvaluation,
+                feature="interview_evaluate", db=db,
+            )
+            return {"status": "SUCCESS", **validated.model_dump()}
         except Exception as e:
             logger.error(f"Interview evaluation error: {e}")
             return {

@@ -1,5 +1,10 @@
 import json
-from app.core.llm_client import call_llm_with_fallback
+import uuid
+from typing import Optional
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.services.llm_gateway_service import LLMGatewayService
+from app.services.structured_llm import generate_structured, StructuredGenerationError
+from app.schemas.llm_structured import LLMChallenge
 from app.core.logging import logger
 
 
@@ -7,16 +12,43 @@ from app.core.logging import logger
 class AIMentorService:
 
     @staticmethod
-    async def _call_gemini(system_prompt: str, user_prompt: str, json_mode: bool = False) -> str:
-        """Calls multi-provider LLM service with primary Gemini and automatic Groq fallback."""
-        return await call_llm_with_fallback(system_prompt, user_prompt, json_mode=json_mode)
+    async def _call_gemini(
+        system_prompt: str,
+        user_prompt: str,
+        json_mode: bool = False,
+        feature: str = "mentor",
+        db: Optional[AsyncSession] = None,
+        user_id: Optional[uuid.UUID] = None,
+    ) -> str:
+        """
+        Routes through the centralized LLMGatewayService rather than calling
+        the raw provider cascade directly, so every AI Mentor call gets
+        request-id tracking and, when a db session is available, a real
+        llm_usage_logs row (previously the gateway existed but nothing called
+        it, so the admin cost dashboard always reported zero usage).
+        """
+        return await LLMGatewayService.generate(
+            system_prompt,
+            user_prompt,
+            feature=feature,
+            json_mode=json_mode,
+            user_id=user_id,
+            db=db,
+        )
 
 
     # ─────────────────────────────────────────────
     # 1. AI MENTOR CHAT & GUIDANCE
     # ─────────────────────────────────────────────
     @staticmethod
-    async def chat_with_mentor(message: str, mode: str = "Explain", user_skill_rating: int = 1000, recent_errors: list = None) -> dict:
+    async def chat_with_mentor(
+        message: str,
+        mode: str = "Explain",
+        user_skill_rating: int = 1000,
+        recent_errors: list = None,
+        db: Optional[AsyncSession] = None,
+        user_id: Optional[uuid.UUID] = None,
+    ) -> dict:
         """General AI Tutor chat endpoint with injection protection and learner awareness."""
         cleaned = message.strip()[:1500]
         recent_errors = recent_errors or []
@@ -48,7 +80,9 @@ class AIMentorService:
         user_prompt = f"User Query: {cleaned}"
 
         try:
-            reply = await AIMentorService._call_gemini(system_prompt, user_prompt)
+            reply = await AIMentorService._call_gemini(
+                system_prompt, user_prompt, feature="mentor_chat", db=db, user_id=user_id
+            )
         except Exception:
             # Intelligent dynamic backup generator when LLM API call fails
             reply = AIMentorService._generate_dynamic_tutor_fallback(cleaned, mode, user_skill_rating)
@@ -56,7 +90,15 @@ class AIMentorService:
         return {"mode": mode, "content": reply, "status": "SUCCESS"}
 
     @staticmethod
-    async def generate_mentor_guidance(user_code: str, challenge_id: str, mode: str, user_skill_rating: int, recent_errors: list = None) -> dict:
+    async def generate_mentor_guidance(
+        user_code: str,
+        challenge_id: str,
+        mode: str,
+        user_skill_rating: int,
+        recent_errors: list = None,
+        db: Optional[AsyncSession] = None,
+        user_id: Optional[uuid.UUID] = None,
+    ) -> dict:
         """Generates contextual AI mentor responses for active code challenges."""
         cleaned_prompt = user_code.strip()[:1500]
         recent_errors = recent_errors or []
@@ -93,7 +135,9 @@ class AIMentorService:
         user_prompt = f"Challenge ID: {challenge_id}\n\nUser Code:\n```python\n{cleaned_prompt}\n```"
 
         try:
-            reply = await AIMentorService._call_gemini(system_prompt, user_prompt)
+            reply = await AIMentorService._call_gemini(
+                system_prompt, user_prompt, feature="mentor_guidance", db=db, user_id=user_id
+            )
         except Exception:
             reply = AIMentorService._generate_dynamic_tutor_fallback(
                 f"Challenge: {challenge_id}, Code: {cleaned_prompt}", mode, user_skill_rating
@@ -154,7 +198,9 @@ class AIMentorService:
         node_type: str,
         skill_rating: int,
         target_language: str = "python",
-        batch_size: int = 10
+        batch_size: int = 10,
+        db: Optional[AsyncSession] = None,
+        user_id: Optional[uuid.UUID] = None,
     ) -> dict:
         """
         Calls Gemini to generate a batch of unique, persistent coding challenges
@@ -224,15 +270,31 @@ CRITICAL RULES:
         }
         fallback_stub = fallback_stubs.get(target_language.lower(), fallback_stubs["python"])
 
+        def _unwrap_challenges_key(data):
+            # Models sometimes wrap the array in {"challenges": [...]} despite
+            # being asked for a bare array — normalize before validation
+            # rather than rejecting an otherwise-valid response over this.
+            if isinstance(data, dict) and "challenges" in data:
+                return data["challenges"]
+            return data
+
         try:
-            raw = await AIMentorService._call_gemini(system_prompt, user_prompt, json_mode=True)
-            batch = json.loads(raw)
-            if isinstance(batch, dict) and "challenges" in batch:
-                batch = batch["challenges"]
-            if not isinstance(batch, list) or len(batch) == 0:
-                raise ValueError("Expected non-empty JSON list of challenges")
+            validated = await generate_structured(
+                system_prompt,
+                user_prompt,
+                schema=list[LLMChallenge],
+                feature="challenge_batch_generation",
+                db=db,
+                user_id=user_id,
+                preprocess=_unwrap_challenges_key,
+            )
+            batch = [c.model_dump() for c in validated]
             return {"status": "SUCCESS", "challenges": batch}
         except Exception as e:
+            # Catches StructuredGenerationError (schema invalid after retries)
+            # as well as anything unexpected — this method must never raise,
+            # since callers (question_bank_service, challenges.py) don't wrap
+            # it in their own try/except and rely on always getting a dict back.
             logger.error(f"Challenge batch generation error: {e}")
             return {
                 "status": "FALLBACK",
@@ -297,7 +359,9 @@ CRITICAL RULES:
         realm_name: str,
         node_type: str,
         skill_rating: int,
-        target_language: str = "python"
+        target_language: str = "python",
+        db: Optional[AsyncSession] = None,
+        user_id: Optional[uuid.UUID] = None,
     ) -> dict:
         """
         Calls Gemini to generate a complete, fresh coding challenge tailored to the
@@ -362,15 +426,18 @@ Rules:
         fallback_stub = fallback_stubs.get(target_language.lower(), fallback_stubs["python"])
 
         try:
-            raw = await AIMentorService._call_gemini(system_prompt, user_prompt, json_mode=True)
-            challenge = json.loads(raw)
-            # Ensure required fields exist
-            required = ["title", "description", "storyContext", "initialCode", "testCases", "hints"]
-            for field in required:
-                if field not in challenge:
-                    raise ValueError(f"Missing field: {field}")
-            return {"status": "SUCCESS", "challenge": challenge}
+            validated = await generate_structured(
+                system_prompt,
+                user_prompt,
+                schema=LLMChallenge,
+                feature="challenge_generation",
+                db=db,
+                user_id=user_id,
+            )
+            return {"status": "SUCCESS", "challenge": validated.model_dump()}
         except Exception as e:
+            # Catches StructuredGenerationError (schema invalid after retries)
+            # as well as anything unexpected — this method must never raise.
             logger.error(f"Challenge generation error: {e}")
             # Structured fallback so the frontend never crashes
             return {
@@ -456,6 +523,104 @@ Provide a short feedback (3-4 sentences):
             "all_passed": all_passed,
             "status": "SUCCESS"
         }
+
+    # ─────────────────────────────────────────────
+    # AI CODE REVIEWER — scored rubric
+    # ─────────────────────────────────────────────
+    @staticmethod
+    def _heuristic_review(code: str, all_passed: bool) -> dict:
+        """
+        Deterministic fallback used when the LLM call fails or returns
+        malformed JSON. Not a substitute for a real review — just enough
+        signal that the UI never shows a broken/empty rubric.
+        """
+        length_penalty = 10 if len(code) > 2000 else 0
+        correctness = 95 if all_passed else 35
+        return {
+            "overall_score": max(0, correctness - length_penalty),
+            "breakdown": {
+                "correctness": correctness,
+                "performance": 70,
+                "readability": 70,
+                "security": 80,
+                "maintainability": 70,
+            },
+            "summary": (
+                "All tests passed. Full review is temporarily unavailable — this is a baseline estimate."
+                if all_passed else
+                "Some tests are still failing. Full review is temporarily unavailable — check your test output for the exact mismatch."
+            ),
+            "source": "heuristic",
+        }
+
+    @staticmethod
+    async def generate_code_review(
+        code: str,
+        challenge_title: str,
+        challenge_description: str,
+        test_results: list,
+        skill_rating: int,
+        db: Optional[AsyncSession] = None,
+        user_id: Optional[uuid.UUID] = None,
+    ) -> dict:
+        """
+        Structured, scored code review — a richer companion to
+        generate_feedback()'s free-text output. Scores correctness,
+        performance, readability, security, and maintainability individually
+        (0-100) rather than a single paragraph, so progress is comparable
+        across submissions instead of just qualitative.
+        """
+        all_passed = all(r.get("passed", False) for r in test_results)
+        passed_count = sum(1 for r in test_results if r.get("passed", False))
+        total_count = len(test_results) or 1
+
+        system_prompt = (
+            "You are a senior code reviewer for CODE REALM, an RPG coding game. "
+            "Score the student's submission on 5 dimensions from 0-100: correctness, performance, "
+            "readability, security, maintainability. Be honest and specific, not generous by default — "
+            "a score of 100 should be rare. Return ONLY valid JSON, no markdown, matching exactly:\n"
+            '{"overall_score": <int>, "breakdown": {"correctness": <int>, "performance": <int>, '
+            '"readability": <int>, "security": <int>, "maintainability": <int>}, '
+            '"summary": "<2-3 sentence review>"}'
+        )
+        user_prompt = f"""
+Challenge: "{challenge_title}"
+Task: {challenge_description}
+
+Student's Code:
+```
+{code[:2000]}
+```
+
+Test Results: {passed_count}/{total_count} passed
+Player Skill Rating: {skill_rating}/2500
+"""
+
+        try:
+            raw = await AIMentorService._call_gemini(
+                system_prompt, user_prompt, json_mode=True,
+                feature="code_review", db=db, user_id=user_id,
+            )
+            parsed = json.loads(raw)
+
+            breakdown = parsed["breakdown"]
+            required_keys = {"correctness", "performance", "readability", "security", "maintainability"}
+            if not required_keys.issubset(breakdown.keys()):
+                raise ValueError("Missing rubric dimensions in LLM response")
+
+            clamped_breakdown = {k: max(0, min(100, int(breakdown[k]))) for k in required_keys}
+            overall = max(0, min(100, int(parsed.get("overall_score", sum(clamped_breakdown.values()) // 5))))
+
+            return {
+                "status": "SUCCESS",
+                "overall_score": overall,
+                "breakdown": clamped_breakdown,
+                "summary": str(parsed.get("summary", "")).strip() or "Review generated.",
+                "source": "ai",
+            }
+        except Exception as e:
+            logger.warning(f"Code review generation failed, using heuristic fallback: {e}")
+            return {"status": "SUCCESS", **AIMentorService._heuristic_review(code, all_passed)}
 
 
 ai_mentor_service = AIMentorService()

@@ -33,11 +33,37 @@ class Achievement(Base):
 
 class UserAchievement(Base):
     __tablename__ = "user_achievements"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     achievement_id = Column(String(50), ForeignKey("achievements.id", ondelete="CASCADE"), nullable=False)
     unlocked_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    
+
     user = relationship("User")
     achievement = relationship("Achievement")
+
+
+class RewardGrant(Base):
+    """
+    Append-only ledger of every reward ever granted, keyed by an idempotency
+    key so a retried or double-clicked request cannot award twice.
+
+    The unique constraint on idempotency_key is what actually enforces this —
+    RewardService relies on the database rejecting the duplicate rather than on
+    a read-then-write check, which would race under concurrent submissions.
+    """
+    __tablename__ = "reward_grants"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    idempotency_key = Column(String(200), nullable=False, unique=True, index=True)
+
+    reason = Column(String(100), nullable=False)  # challenge_completed, achievement, daily_mission, ...
+    reference_id = Column(String(100), nullable=True)  # challenge_id / node_id / mission_id
+
+    xp_granted = Column(Integer, default=0, nullable=False)
+    coins_granted = Column(Integer, default=0, nullable=False)
+    stars_granted = Column(Integer, default=0, nullable=False)
+    rating_delta = Column(Integer, default=0, nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

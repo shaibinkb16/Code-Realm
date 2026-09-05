@@ -1,6 +1,9 @@
 import React from 'react';
 import type { Achievement } from '../../types/game';
-import { Award, Zap, Brain, Bug, Flame, Building2, HelpCircle, Lock } from 'lucide-react';
+import {
+  Award, Zap, Brain, Bug, Flame, Building2, HelpCircle, Lock,
+  Sword, BookOpen, Compass, Shield, Star, Trophy, Crown,
+} from 'lucide-react';
 
 interface Props {
   achievements: Achievement[];
@@ -16,6 +19,13 @@ export const AchievementGallery: React.FC<Props> = ({ achievements }) => {
       case 'Flame': return <Flame size={24} />;
       case 'Building2': return <Building2 size={24} />;
       case 'HelpCircle': return <HelpCircle size={24} />;
+      case 'Sword': return <Sword size={24} />;
+      case 'BookOpen': return <BookOpen size={24} />;
+      case 'Compass': return <Compass size={24} />;
+      case 'Shield': return <Shield size={24} />;
+      case 'Star': return <Star size={24} />;
+      case 'Trophy': return <Trophy size={24} />;
+      case 'Crown': return <Crown size={24} />;
       default: return <Award size={24} />;
     }
   };

@@ -6,9 +6,12 @@ from sqlalchemy.orm import selectinload
 import uuid
 import random
 import string
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 
+import logging
+
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.redis import redis_manager
 from app.core.email import send_otp_email
@@ -17,8 +20,18 @@ from app.models.user import User, UserProfile
 from app.schemas.auth import UserCreate, UserLogin, Token, UserResponse, OTPVerifyRequest, OTPResendRequest, RefreshTokenRequest
 from app.core.exceptions import AuthenticationError, ValidationError
 from app.api.deps import get_current_user, RateLimiter
+from app.services import refresh_token_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Account lockout thresholds (see login()). Chosen to absorb normal typos
+# (5 attempts) while making credential-stuffing meaningfully slower (15 min
+# lockout per cycle) without permanently locking someone out over a forgotten
+# password.
+MAX_FAILED_LOGIN_ATTEMPTS = 5
+LOCKOUT_DURATION = timedelta(minutes=15)
 
 async def _generate_and_send_otp(email: str, background_tasks: BackgroundTasks):
     """Generates a 6-digit OTP, stores it in Redis for 5 minutes, and sends the email in the background."""
@@ -74,20 +87,55 @@ async def login(credentials: UserLogin, background_tasks: BackgroundTasks, db: A
     )
     user = res.scalars().first()
 
+    # Account lockout after repeated failed attempts. These columns existed
+    # in the schema before this — nothing ever read or wrote them, so
+    # credential stuffing had no server-side friction beyond rate limiting
+    # on the endpoint itself (shared across all usernames, not per-account).
+    # locked_until is a naive DateTime (matching every other timestamp column
+    # in this codebase, e.g. created_at = Column(DateTime, default=
+    # datetime.utcnow)) — comparing it against a timezone-aware datetime
+    # raises TypeError, so this uses naive datetime.utcnow() throughout
+    # rather than datetime.now(timezone.utc).
+    if user and user.locked_until and user.locked_until > datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail=(
+                "Account temporarily locked due to repeated failed login attempts. "
+                f"Try again after {user.locked_until.isoformat()}Z."
+            ),
+        )
+
     if not user or not verify_password(credentials.password, user.hashed_password):
+        if user:
+            user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+            if user.failed_login_attempts >= MAX_FAILED_LOGIN_ATTEMPTS:
+                user.locked_until = datetime.utcnow() + LOCKOUT_DURATION
+                logger.warning(
+                    "Account locked after %s failed attempts: %s",
+                    user.failed_login_attempts,
+                    user.email,
+                )
+            await db.commit()
         raise AuthenticationError("Invalid username or password.")
-        
+
+    if user.failed_login_attempts:
+        user.failed_login_attempts = 0
+        user.locked_until = None
+        await db.commit()
+
     if not user.is_active:
         # Generate new OTP automatically when they try to log in unverified
         await _generate_and_send_otp(user.email, background_tasks)
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, 
+            status_code=status.HTTP_403_FORBIDDEN,
             detail={"message": "Account not verified", "email": user.email}
         )
 
     access_token = create_access_token(subject=str(user.id))
     refresh_token = create_refresh_token(subject=str(user.id))
-    
+    await refresh_token_service.record(db, user.id, refresh_token)
+    await db.commit()
+
     return Token(access_token=access_token, refresh_token=refresh_token)
 
 @router.post("/verify-otp", response_model=Token, dependencies=[Depends(RateLimiter(30, 60))])
@@ -101,8 +149,13 @@ async def verify_otp(request: OTPVerifyRequest, db: AsyncSession = Depends(get_d
     is_valid = False
     if stored_otp and stored_otp == user_otp:
         is_valid = True
-    elif user_otp == "123456":
-        # Dev / fallback code accepted when in development or fallback
+    elif user_otp == "123456" and not settings.IS_PRODUCTION:
+        # Development-only bypass so local signup works without SMTP configured.
+        # Gated on ENVIRONMENT so it can never be used against production.
+        logger.warning(
+            "Development OTP bypass used for %s. This is disabled in production.",
+            clean_email,
+        )
         is_valid = True
 
     if not is_valid:
@@ -116,10 +169,12 @@ async def verify_otp(request: OTPVerifyRequest, db: AsyncSession = Depends(get_d
     user.is_active = True
     await db.commit()
     await redis_manager.delete(f"otp:{clean_email}")
-    
+
     access_token = create_access_token(subject=str(user.id))
     refresh_token = create_refresh_token(subject=str(user.id))
-    
+    await refresh_token_service.record(db, user.id, refresh_token)
+    await db.commit()
+
     return Token(access_token=access_token, refresh_token=refresh_token)
 
 @router.post("/resend-otp", response_model=dict, dependencies=[Depends(RateLimiter(10, 3600))])
@@ -138,8 +193,14 @@ async def resend_otp(request: OTPResendRequest, background_tasks: BackgroundTask
     return {"message": "If the email is registered, an OTP was sent."}
 
 @router.post("/refresh", response_model=Token)
-async def refresh_token(request: RefreshTokenRequest):
-    """Exchanges a valid refresh token for a new access token."""
+async def refresh_token(request: RefreshTokenRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Exchanges a valid refresh token for a new access token, rotating the
+    refresh token itself in the process (see refresh_token_service). The
+    previous version returned the same refresh token indefinitely, so a
+    stolen refresh token remained valid until its natural 7-day expiry no
+    matter what a user did in /auth/sessions — there was nothing to revoke.
+    """
     try:
         payload = decode_token(request.refresh_token)
         if payload.get("type") != "refresh":
@@ -147,12 +208,24 @@ async def refresh_token(request: RefreshTokenRequest):
         user_id = payload.get("sub")
         if not user_id:
             raise AuthenticationError("Invalid token payload.")
-            
-        access_token = create_access_token(subject=user_id)
-        # We can issue a new refresh token or keep the old one. We'll just return the same one for simplicity
-        return Token(access_token=access_token, refresh_token=request.refresh_token)
+    except AuthenticationError:
+        raise
     except Exception:
         raise AuthenticationError("Invalid or expired refresh token.")
+
+    new_refresh_token = create_refresh_token(subject=user_id)
+    allowed = await refresh_token_service.check_and_rotate(
+        db, request.refresh_token, new_refresh_token, user_id
+    )
+    if not allowed:
+        await db.commit()
+        raise AuthenticationError(
+            "This refresh token was already used and has been revoked. Please log in again."
+        )
+
+    access_token = create_access_token(subject=user_id)
+    await db.commit()
+    return Token(access_token=access_token, refresh_token=new_refresh_token)
 
 @router.get("/me", response_model=UserResponse)
 async def get_my_profile(current_user: User = Depends(get_current_user)):
@@ -322,6 +395,8 @@ async def google_callback(
     # 5. Issue Code Realm JWT tokens
     access_token = create_access_token(subject=str(user.id))
     refresh_token = create_refresh_token(subject=str(user.id))
+    await refresh_token_service.record(db, user.id, refresh_token)
+    await db.commit()
 
     redirect_url = f"{frontend_base}/#auth_callback?access_token={access_token}&refresh_token={refresh_token}"
     return RedirectResponse(url=redirect_url, status_code=307)
@@ -504,6 +579,8 @@ async def github_callback(
     # 5. Issue application JWT tokens
     access_token = create_access_token(subject=str(user.id))
     refresh_token = create_refresh_token(subject=str(user.id))
+    await refresh_token_service.record(db, user.id, refresh_token)
+    await db.commit()
 
     redirect_url = f"{frontend_base}/#auth_callback?access_token={access_token}&refresh_token={refresh_token}"
     return RedirectResponse(url=redirect_url, status_code=307)
@@ -662,6 +739,8 @@ async def verify_passkey_login(
 
     access_token = create_access_token(subject=str(user.id))
     refresh_token = create_refresh_token(subject=str(user.id))
+    await refresh_token_service.record(db, user.id, refresh_token)
+    await db.commit()
 
     return Token(access_token=access_token, refresh_token=refresh_token)
 

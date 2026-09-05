@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from typing import List, Optional
 from app.core.database import get_db
 from app.models.user import User, UserProfile
 from app.models.learning import UserLanguageMastery, UserTopicMastery
+from app.models.submission import CodeSubmission
 from app.core.redis import redis_manager
 import json
 from pydantic import BaseModel
@@ -58,11 +60,11 @@ async def get_global_leaderboard(
     if language_id:
         query = query.join(UserLanguageMastery, User.id == UserLanguageMastery.user_id)
         query = query.where(UserLanguageMastery.language_id == language_id)
-        query = query.order_by(UserLanguageMastery.proficiency_score.desc())
+        query = query.order_by(UserLanguageMastery.mastery_percentage.desc())
     elif topic_id:
         query = query.join(UserTopicMastery, User.id == UserTopicMastery.user_id)
         query = query.where(UserTopicMastery.topic_id == topic_id)
-        query = query.order_by(UserTopicMastery.proficiency_score.desc())
+        query = query.order_by(UserTopicMastery.mastery_percentage.desc())
     else:
         query = query.order_by(UserProfile.rank_rating.desc())
         
@@ -87,3 +89,52 @@ async def get_global_leaderboard(
         
     await redis_manager.set(cache_key, json.dumps(entries), ttl=300) # Cache for 5 minutes
     return entries
+
+
+# ─────────────────────────────────────────────────────────
+# GET /leaderboards/ghost-pace
+#
+# Backs the Code Duel "ghost race" — instead of a `Math.random()`-driven fake
+# opponent, the duel races the player against a real completion-time signal
+# from actual players at a similar skill rating. Built from
+# code_submissions.solve_time_seconds (only populated by callers that measure
+# it, e.g. CodeDuel's countdown timer) rather than from execution_time_ms,
+# which is code runtime, not how long the user took to solve the problem.
+# ─────────────────────────────────────────────────────────
+class GhostPaceDTO(BaseModel):
+    median_seconds: int
+    sample_size: int
+    rating_band: str
+
+
+@router.get("/ghost-pace", response_model=GhostPaceDTO)
+async def get_ghost_pace(
+    rating: int = 1000,
+    band: int = 200,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Median real solve time (seconds) among passed submissions from users
+    within `rating` ± `band`. sample_size=0 means no real data exists yet at
+    this band — callers must treat that as "no ghost available" rather than
+    inventing a number, so the UI can be honest about a thin sample.
+    """
+    query = (
+        select(CodeSubmission.solve_time_seconds)
+        .join(UserProfile, CodeSubmission.user_id == UserProfile.user_id)
+        .where(
+            CodeSubmission.status == "passed",
+            CodeSubmission.solve_time_seconds.isnot(None),
+            UserProfile.rank_rating.between(rating - band, rating + band),
+        )
+        .order_by(CodeSubmission.solve_time_seconds.asc())
+        .limit(500)
+    )
+    result = await db.execute(query)
+    times = sorted(r[0] for r in result.all())
+
+    if not times:
+        return GhostPaceDTO(median_seconds=0, sample_size=0, rating_band=f"{rating}±{band}")
+
+    median = times[len(times) // 2]
+    return GhostPaceDTO(median_seconds=median, sample_size=len(times), rating_band=f"{rating}±{band}")

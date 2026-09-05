@@ -7,7 +7,7 @@ from app.api.deps import get_current_user
 from app.models.user import User
 from app.models.challenge import Challenge
 from app.models.intelligence import MistakeLog
-from app.models.learning import UserLanguageMastery
+from app.models.learning import UserLanguageMastery, UserTopicMastery, Topic
 from app.services.ai_mentor_service import ai_mentor_service
 from pydantic import BaseModel
 import random
@@ -64,20 +64,50 @@ async def recommend_practice(
 
     if mode == "adaptive":
         target_elo = current_user.profile.rank_rating if current_user.profile else 1000
-        
-        # In a real app we'd map Elo to Easy/Med/Hard accurately or filter by numeric difficulty.
-        # Here we just map strings.
-        target_diff = "Easy" if target_elo < 1200 else ("Medium" if target_elo < 1800 else "Hard")
-        
-        res = await db.execute(
-            select(Challenge).where(Challenge.difficulty == target_diff).limit(10)
+
+        # Mastery-aware targeting: find the user's weakest tracked challenge
+        # type (see MasteryService, which populates this on every graded
+        # submission) and recommend from there, using that topic's own skill
+        # rating rather than the flat global Elo — this is what actually
+        # closes the gap between "recommend the next challenge" and "target
+        # what this specific user is worst at," instead of only banding on
+        # one overall number. Falls back to the old global-rating behavior
+        # for a brand-new user with no mastery data yet.
+        weakest_topic_name: Optional[str] = None
+        res_weak = await db.execute(
+            select(Topic.name, UserTopicMastery.skill_rating)
+            .join(UserTopicMastery, UserTopicMastery.topic_id == Topic.id)
+            .where(UserTopicMastery.user_id == current_user.id)
+            .order_by(UserTopicMastery.mastery_percentage.asc())
+            .limit(1)
         )
+        weakest_row = res_weak.first()
+        if weakest_row:
+            weakest_topic_name, topic_rating = weakest_row
+            target_elo = topic_rating
+
+        target_diff = "Easy" if target_elo < 1200 else ("Medium" if target_elo < 1800 else "Hard")
+
+        query = select(Challenge).where(Challenge.difficulty == target_diff)
+        if weakest_topic_name:
+            query = query.where(Challenge.type == weakest_topic_name)
+        res = await db.execute(query.limit(10))
         challenges = res.scalars().all()
-        
+
+        # A weakest-topic filter can legitimately return nothing (no existing
+        # challenge of that exact type/difficulty yet) — fall back to any
+        # difficulty-matched challenge rather than failing the recommendation.
+        if not challenges and weakest_topic_name:
+            res = await db.execute(
+                select(Challenge).where(Challenge.difficulty == target_diff).limit(10)
+            )
+            challenges = res.scalars().all()
+
         if challenges:
             c = random.choice(challenges)
             return {
                 "status": "SUCCESS",
+                "targeted_weak_topic": weakest_topic_name,
                 "challenge": {
                     "id": c.id,
                     "title": c.title,
@@ -87,7 +117,7 @@ async def recommend_practice(
                     "testCases": [{"id": str(t.id), "input": t.input_data, "expectedOutput": t.expected_output, "description": t.description} for t in c.test_cases] if c.test_cases else []
                 }
             }
-        
+
         # If no challenge found in DB, fallback to AI generation & persist in DB QuestionBank
         from app.services.question_bank_service import QuestionBankService
         qset = await QuestionBankService(db).get_or_create_question_set(
@@ -101,6 +131,7 @@ async def recommend_practice(
         c = qset.challenges[0]
         return {
             "status": "SUCCESS",
+            "targeted_weak_topic": weakest_topic_name,
             "challenge": {
                 "id": c.id,
                 "title": c.title,

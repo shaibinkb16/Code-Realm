@@ -16,6 +16,11 @@ class CodeSubmission(Base):
     status = Column(String(30), nullable=False) # passed, failed, syntax_error, timeout
     execution_time_ms = Column(Integer, nullable=False)
     stars_earned = Column(Integer, default=0, nullable=False)
+    # Wall-clock time the user actually spent on this attempt, in seconds, when
+    # the caller can measure it (e.g. Code Duels track a countdown from the
+    # moment a round starts). Nullable: most submission paths don't have a
+    # meaningful "time to solve" and must not fabricate one.
+    solve_time_seconds = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     user = relationship("User", back_populates="submissions")

@@ -13,6 +13,10 @@ class CodeExecutionRequest(BaseModel):
     language: str = "python"
     # AI-generated test cases passed directly from the frontend
     test_cases: List[TestCaseInput] = []
+    # Real elapsed wall-clock time for this attempt, when the caller can
+    # measure it (e.g. a Code Duel's countdown timer). Optional — most
+    # callers omit it, and no value is ever synthesized server-side.
+    solve_time_seconds: Optional[int] = None
 
 class CodeFeedbackRequest(BaseModel):
     code: str

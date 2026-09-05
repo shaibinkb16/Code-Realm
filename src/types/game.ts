@@ -144,7 +144,10 @@ export interface Achievement {
   id: string;
   title: string;
   description: string;
-  category: 'Learning' | 'Competition' | 'Debugging' | 'Speed' | 'Projects' | 'Secret';
+  // Widened from a fixed union: real achievement categories now come from
+  // the backend catalog (combat/learning/consistency/mastery) rather than
+  // being invented client-side, so this can't stay a closed set of guesses.
+  category: string;
   icon: string;
   xpReward: number;
   coinReward: number;
