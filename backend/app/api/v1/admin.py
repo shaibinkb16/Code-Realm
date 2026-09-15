@@ -448,3 +448,79 @@ async def update_feedback_status(
             "resolved_at": feedback.resolved_at.isoformat() if feedback.resolved_at else None
         }
     }
+
+
+# ─────────────────────────────────────────────────────────
+# CHALLENGE REPORTS  (user-flagged AI question issues)
+# ─────────────────────────────────────────────────────────
+class ResolveReportRequest(BaseModel):
+    status: str                   # reviewed | resolved | dismissed
+    admin_notes: Optional[str] = None
+
+@router.get("/challenge-reports")
+async def get_challenge_reports(
+    status_filter: Optional[str] = Query(None, alias="status"),
+    limit: int = Query(100, le=500),
+    current_admin: User = Depends(require_permission("users:view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all user-submitted challenge issue reports, newest first."""
+    from app.models.admin import ChallengeReport
+    from app.models.user import User as UserModel
+    from sqlalchemy.orm import selectinload
+
+    stmt = (
+        select(ChallengeReport)
+        .options(selectinload(ChallengeReport.reporter))
+        .order_by(ChallengeReport.created_at.desc())
+        .limit(limit)
+    )
+    if status_filter:
+        stmt = stmt.where(ChallengeReport.status == status_filter)
+
+    res = await db.execute(stmt)
+    reports = res.scalars().all()
+
+    return {
+        "status": "SUCCESS",
+        "reports": [
+            {
+                "id": str(r.id),
+                "challenge_id": r.challenge_id,
+                "reason": r.reason,
+                "details": r.details,
+                "report_status": r.status,
+                "reported_by_id": str(r.reported_by) if r.reported_by else None,
+                "reporter_username": r.reporter.username if r.reporter else "Anonymous",
+                "created_at": r.created_at.isoformat(),
+            }
+            for r in reports
+        ],
+    }
+
+
+@router.patch("/challenge-reports/{report_id}")
+async def resolve_challenge_report(
+    report_id: uuid.UUID,
+    req: ResolveReportRequest,
+    current_admin: User = Depends(require_permission("users:view")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark a challenge report as reviewed, resolved, or dismissed."""
+    from app.models.admin import ChallengeReport
+
+    res = await db.execute(select(ChallengeReport).where(ChallengeReport.id == report_id))
+    report = res.scalars().first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    valid = {"reviewed", "resolved", "dismissed"}
+    if req.status not in valid:
+        raise HTTPException(status_code=422, detail=f"status must be one of {valid}")
+
+    report.status = req.status
+    if req.admin_notes is not None:
+        report.details = (report.details or "") + f"\n\n[Admin note]: {req.admin_notes.strip()}"
+
+    await db.commit()
+    return {"status": "SUCCESS", "report_id": str(report.id), "new_status": report.status}

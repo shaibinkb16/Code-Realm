@@ -382,3 +382,65 @@ async def get_ai_code_review(
         user_id=current_user.id if current_user else None,
     )
 
+
+# ─────────────────────────────────────────────────────────
+# POST /challenges/report
+# Users flag an AI-generated question as incorrect, unclear,
+# broken tests, etc. Admins can review and resolve via
+# the /admin/challenge-reports endpoints.
+# ─────────────────────────────────────────────────────────
+class ChallengeReportRequest(BaseModel):
+    challenge_id: str          # challenge.id or node+sublevel composite key
+    challenge_title: str       # human-readable label for admin panel
+    node_id: str
+    sub_level_index: int
+    reason: str                # wrong_answer | unclear | broken_tests | offensive | duplicate | other
+    details: Optional[str] = None
+
+@router.post("/report")
+async def report_challenge(
+    req: ChallengeReportRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Lets a user mark an AI-generated question as problematic.
+    Stores the report for admin review. The client skips the question
+    after receiving a successful response.
+    """
+    from app.models.admin import ChallengeReport
+
+    valid_reasons = {"wrong_answer", "unclear", "broken_tests", "offensive", "duplicate", "other"}
+    if req.reason not in valid_reasons:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid reason '{req.reason}'. Must be one of: {', '.join(sorted(valid_reasons))}"
+        )
+
+    meta = f"[node:{req.node_id} | sub:{req.sub_level_index} | title:{req.challenge_title}]"
+    full_details = f"{meta}\n{req.details.strip()}" if req.details and req.details.strip() else meta
+
+    report = ChallengeReport(
+        challenge_id=req.challenge_id,
+        reported_by=current_user.id,
+        reason=req.reason,
+        details=full_details,
+        status="open",
+    )
+    db.add(report)
+    await db.commit()
+    await db.refresh(report)
+
+    logger.info(
+        "challenge_reported",
+        report_id=str(report.id),
+        challenge_id=req.challenge_id,
+        reason=req.reason,
+        user_id=str(current_user.id),
+    )
+
+    return {
+        "status": "SUCCESS",
+        "message": "Question reported. You will be moved to the next question.",
+        "report_id": str(report.id),
+    }

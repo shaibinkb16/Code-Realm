@@ -78,6 +78,9 @@ class ChallengeReport(Base):
     status = Column(String(20), default="open", nullable=False)  # open, reviewed, resolved, dismissed
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
+    reporter = relationship("User", foreign_keys=[reported_by], lazy="select")
+
+
 
 class LLMUsageLog(Base):
     __tablename__ = "llm_usage_logs"

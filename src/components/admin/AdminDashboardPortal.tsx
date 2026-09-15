@@ -71,13 +71,24 @@ interface AdminFeedbackItem {
   created_at: string;
 }
 
+interface ChallengeReportItem {
+  id: string;
+  challenge_id: string;
+  reason: string;
+  details: string | null;
+  report_status: string;
+  reported_by_id: string | null;
+  reporter_username: string;
+  created_at: string;
+}
+
 interface AdminDashboardPortalProps {
   onSwitchToStudentView?: () => void;
 }
 
 export const AdminDashboardPortal: React.FC<AdminDashboardPortalProps> = ({ onSwitchToStudentView }) => {
   const { user, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'challenges' | 'feedback' | 'ai' | 'logs'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'challenges' | 'feedback' | 'question-reports' | 'ai' | 'logs'>('overview');
 
   // Overview & Metrics state
   const [llmUsage, setLlmUsage] = useState({ total_calls: 0, total_tokens: 0, avg_latency_ms: 0, estimated_cost_usd: 0 });
@@ -117,6 +128,12 @@ export const AdminDashboardPortal: React.FC<AdminDashboardPortalProps> = ({ onSw
   const [adminNoteInput, setAdminNoteInput] = useState('');
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
+  // Challenge Question Reports state
+  const [questionReports, setQuestionReports] = useState<ChallengeReportItem[]>([]);
+  const [isLoadingQuestionReports, setIsLoadingQuestionReports] = useState(false);
+  const [reportStatusFilter, setReportStatusFilter] = useState<'all' | 'open' | 'reviewed' | 'resolved' | 'dismissed'>('open');
+  const [isResolvingReport, setIsResolvingReport] = useState(false);
+
   // Logs state
   const [actionLogs, setActionLogs] = useState<ActionLog[]>([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
@@ -141,6 +158,7 @@ export const AdminDashboardPortal: React.FC<AdminDashboardPortalProps> = ({ onSw
     if (activeTab === 'users') fetchUsers();
     if (activeTab === 'challenges') fetchChallenges();
     if (activeTab === 'feedback') fetchAdminFeedback();
+    if (activeTab === 'question-reports') fetchQuestionReports(reportStatusFilter === 'all' ? undefined : reportStatusFilter);
     if (activeTab === 'ai') fetchMetrics();
     if (activeTab === 'logs') fetchLogs();
   }, [activeTab]);
@@ -222,6 +240,40 @@ export const AdminDashboardPortal: React.FC<AdminDashboardPortalProps> = ({ onSw
       console.warn("Status update error:", e);
     } finally {
       setIsUpdatingStatus(false);
+    }
+  };
+
+  const fetchQuestionReports = async (statusFilter?: string) => {
+    setIsLoadingQuestionReports(true);
+    try {
+      const token = localStorage.getItem('coderealm_token');
+      const params = statusFilter ? `?status=${statusFilter}` : '';
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || ''}/api/v1/admin/challenge-reports${params}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setQuestionReports(data.reports || []);
+    } catch (e) {
+      console.warn('Question reports fetch error:', e);
+    } finally {
+      setIsLoadingQuestionReports(false);
+    }
+  };
+
+  const handleResolveReport = async (reportId: string, newStatus: 'reviewed' | 'resolved' | 'dismissed', note?: string) => {
+    setIsResolvingReport(true);
+    try {
+      const token = localStorage.getItem('coderealm_token');
+      await fetch(`${import.meta.env.VITE_API_BASE_URL || ''}/api/v1/admin/challenge-reports/${reportId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status: newStatus, admin_notes: note }),
+      });
+      setQuestionReports(prev => prev.map(r => r.id === reportId ? { ...r, report_status: newStatus } : r));
+    } catch (e) {
+      console.warn('Resolve report error:', e);
+    } finally {
+      setIsResolvingReport(false);
     }
   };
 
@@ -454,6 +506,7 @@ const filteredUsers = usersList.filter(u => {
               { id: 'users', label: 'User Roster', icon: Users, count: usersList.length },
               { id: 'challenges', label: 'Content Queue', icon: FileCheck, count: pendingChallenges.length },
               { id: 'feedback', label: 'Bug Reports & Feedback', icon: MessageSquare, count: adminFeedbackList.filter(f => f.status === 'pending').length },
+              { id: 'question-reports', label: 'Question Reports', icon: AlertTriangle, count: questionReports.filter(r => r.report_status === 'open').length },
               { id: 'ai', label: 'AI Engine & Gateway', icon: Cpu },
               { id: 'logs', label: 'Security & Audit Logs', icon: Activity },
             ].map(item => {
@@ -1022,6 +1075,128 @@ const filteredUsers = usersList.filter(u => {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── QUESTION REPORTS TAB ── */}
+          {activeTab === 'question-reports' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#ffffff' }}>AI Question Reports</h2>
+                  <p style={{ fontSize: '13.5px', color: '#94a3b8', marginTop: '2px' }}>User-flagged issues with AI-generated challenges — review, resolve or dismiss</p>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  {(['all', 'open', 'reviewed', 'resolved', 'dismissed'] as const).map(f => (
+                    <button
+                      key={f}
+                      onClick={() => {
+                        setReportStatusFilter(f);
+                        fetchQuestionReports(f === 'all' ? undefined : f);
+                      }}
+                      style={{
+                        padding: '5px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 700, cursor: 'pointer',
+                        background: reportStatusFilter === f ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.05)',
+                        border: `1px solid ${reportStatusFilter === f ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.1)'}`,
+                        color: reportStatusFilter === f ? '#fca5a5' : '#94a3b8',
+                        textTransform: 'capitalize'
+                      }}
+                    >
+                      {f}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => fetchQuestionReports(reportStatusFilter === 'all' ? undefined : reportStatusFilter)}
+                    style={{ background: '#1e2246', border: '1px solid rgba(255,255,255,0.1)', color: '#ffffff', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
+                  >
+                    <RefreshCw size={13} /> Refresh
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ background: '#12142b', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '14px', padding: '24px' }}>
+                {isLoadingQuestionReports ? (
+                  <div style={{ padding: '30px', textAlign: 'center', color: '#94a3b8' }}>
+                    <Loader size={18} style={{ animation: 'spin 1s linear infinite' }} /> Loading reports...
+                  </div>
+                ) : questionReports.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
+                    <CheckCircle size={36} color="#34d399" style={{ marginBottom: '10px' }} />
+                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#ffffff' }}>No reports found</div>
+                    <div style={{ fontSize: '13px', marginTop: '4px' }}>No question reports match the current filter.</div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {questionReports.map(r => {
+                      const reasonColors: Record<string, { bg: string; color: string; border: string }> = {
+                        wrong_answer:  { bg: 'rgba(239,68,68,0.15)',   color: '#fca5a5', border: 'rgba(239,68,68,0.35)' },
+                        broken_tests:  { bg: 'rgba(245,158,11,0.15)',  color: '#fbbf24', border: 'rgba(245,158,11,0.35)' },
+                        unclear:       { bg: 'rgba(99,102,241,0.15)',  color: '#a5b4fc', border: 'rgba(99,102,241,0.35)' },
+                        duplicate:     { bg: 'rgba(139,92,246,0.15)',  color: '#c4b5fd', border: 'rgba(139,92,246,0.35)' },
+                        offensive:     { bg: 'rgba(239,68,68,0.25)',   color: '#f87171', border: 'rgba(239,68,68,0.5)' },
+                        other:         { bg: 'rgba(100,116,139,0.15)', color: '#94a3b8', border: 'rgba(100,116,139,0.35)' },
+                      };
+                      const rc = reasonColors[r.reason] || reasonColors.other;
+                      const statusColor = r.report_status === 'resolved' ? '#34d399' : r.report_status === 'reviewed' ? '#60a5fa' : r.report_status === 'dismissed' ? '#64748b' : '#fbbf24';
+                      const reasonLabel: Record<string, string> = {
+                        wrong_answer: '❌ Wrong Answer', broken_tests: '🔧 Broken Tests',
+                        unclear: '❓ Unclear', duplicate: '🔁 Duplicate', offensive: '🚫 Offensive', other: '💬 Other'
+                      };
+                      return (
+                        <div key={r.id} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          {/* Header row */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                              <span style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 800, background: rc.bg, color: rc.color, border: `1px solid ${rc.border}` }}>
+                                {reasonLabel[r.reason] || r.reason}
+                              </span>
+                              <span style={{ fontSize: '12px', color: '#94a3b8' }}>by <strong style={{ color: '#e2e8f0' }}>@{r.reporter_username}</strong></span>
+                              <span style={{ fontSize: '11px', color: '#475569' }}>{new Date(r.created_at).toLocaleString()}</span>
+                            </div>
+                            <span style={{ padding: '3px 9px', borderRadius: '6px', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', color: statusColor, background: `${statusColor}22`, border: `1px solid ${statusColor}55` }}>
+                              {r.report_status}
+                            </span>
+                          </div>
+
+                          {/* Details */}
+                          {r.details && (
+                            <div style={{ fontSize: '13px', color: '#e2e8f0', lineHeight: 1.55, background: 'rgba(0,0,0,0.25)', padding: '10px 14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', fontFamily: 'var(--font-mono, monospace)', whiteSpace: 'pre-wrap' }}>
+                              {r.details}
+                            </div>
+                          )}
+
+                          {/* Actions */}
+                          {r.report_status === 'open' && (
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                              <button
+                                onClick={() => handleResolveReport(r.id, 'reviewed')}
+                                disabled={isResolvingReport}
+                                style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)', color: '#60a5fa', padding: '5px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+                              >
+                                ⚙️ Mark Reviewed
+                              </button>
+                              <button
+                                onClick={() => handleResolveReport(r.id, 'resolved')}
+                                disabled={isResolvingReport}
+                                style={{ background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.35)', color: '#34d399', padding: '5px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+                              >
+                                ✅ Resolve (Fixed)
+                              </button>
+                              <button
+                                onClick={() => handleResolveReport(r.id, 'dismissed')}
+                                disabled={isResolvingReport}
+                                style={{ background: 'rgba(100,116,139,0.15)', border: '1px solid rgba(100,116,139,0.3)', color: '#94a3b8', padding: '5px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+                              >
+                                🚫 Dismiss
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
