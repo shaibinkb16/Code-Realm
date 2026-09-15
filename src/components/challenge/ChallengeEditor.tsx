@@ -65,10 +65,11 @@ interface ExecutionResult {
 }
 
 const API_BASE = API_BASE_URL;
-const TOTAL_QUESTIONS = 15;
 
 export const ChallengeEditor: React.FC = () => {
   const { activeNode, setActiveTab, completeChallenge, profile, setProfile, theme, activeSubLevelIdx, setActiveSubLevelIdx } = useGame();
+
+  const totalQuestions = activeNode?.subLevels?.length || 100;
 
   const [challenge, setChallenge] = useState<AIChallenge | null>(null);
   const [isLoadingChallenge, setIsLoadingChallenge] = useState(true);
@@ -150,20 +151,20 @@ export const ChallengeEditor: React.FC = () => {
   };
 
   const handleGoToQuestion = (targetIdx: number) => {
-    const bounded = Math.max(1, Math.min(TOTAL_QUESTIONS, targetIdx));
+    const bounded = Math.max(1, Math.min(totalQuestions, targetIdx));
     setSubLevelIdx(bounded);
     if (setActiveSubLevelIdx) setActiveSubLevelIdx(bounded);
     setIsFeedbackOpen(false);
     setTestResults([]);
     setHasPassedAll(false);
-    setOutput(`🚀 Navigated to Question ${bounded}. Loading challenge scaffold...`);
+    setOutput(`🚀 Navigated to Question ${bounded}/${totalQuestions}. Loading challenge scaffold...`);
     generateChallenge(selectedLanguage, bounded);
   };
 
   const handleNextQuestion = () => {
-    if (subLevelIdx >= TOTAL_QUESTIONS) {
+    if (subLevelIdx >= totalQuestions) {
       const skippedSummary = skippedQuestions.length > 0 ? ` Skipped: ${skippedQuestions.sort((a, b) => a - b).join(', ')}.` : '';
-      setOutput(`🏁 You are already on Question ${TOTAL_QUESTIONS} (final question).${skippedSummary}`);
+      setOutput(`🏁 You are on Question ${totalQuestions} (final question).${skippedSummary}`);
       return;
     }
     handleGoToQuestion(subLevelIdx + 1);
@@ -172,9 +173,16 @@ export const ChallengeEditor: React.FC = () => {
   const handleSkipQuestion = () => {
     setSkippedQuestions(prev => (prev.includes(subLevelIdx) ? prev : [...prev, subLevelIdx]));
 
-    if (subLevelIdx >= TOTAL_QUESTIONS) {
+    if (subLevelIdx >= totalQuestions) {
+      const earlierSkipped = skippedQuestions.filter(q => q < totalQuestions && q !== subLevelIdx);
+      if (earlierSkipped.length > 0) {
+        const nextTarget = Math.min(...earlierSkipped);
+        setOutput(`⏭️ Question ${subLevelIdx} skipped. Looping back to your skipped Question ${nextTarget}...`);
+        handleGoToQuestion(nextTarget);
+        return;
+      }
       const updated = skippedQuestions.includes(subLevelIdx) ? skippedQuestions : [...skippedQuestions, subLevelIdx];
-      setOutput(`⏭️ Question ${subLevelIdx} skipped. This is Question ${TOTAL_QUESTIONS}/${TOTAL_QUESTIONS}.` +
+      setOutput(`⏭️ Question ${subLevelIdx} skipped. This is Question ${totalQuestions}/${totalQuestions}.` +
         ` Skipped Questions: ${updated.sort((a, b) => a - b).join(', ')}`);
       return;
     }
@@ -225,22 +233,14 @@ export const ChallengeEditor: React.FC = () => {
       }
       const nodeId = activeNode?.id || 'node-unknown';
       const challengeId = (challenge as any)?.id || `${nodeId}-sub-${subLevelIdx}`;
-      const resp = await fetch(`${API_BASE}/challenges/report`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          challenge_id: challengeId,
-          challenge_title: challenge.title,
-          node_id: nodeId,
-          sub_level_index: subLevelIdx,
-          reason: reportReason,
-          details: reportDetails.trim() || null,
-        }),
+      await api.reportChallenge({
+        challenge_id: challengeId,
+        challenge_title: challenge.title,
+        node_id: nodeId,
+        sub_level_index: subLevelIdx,
+        reason: reportReason,
+        details: reportDetails.trim() || null,
       });
-      if (!resp.ok) throw new Error(`Server error ${resp.status}`);
       setReportSuccess(true);
       // Auto-skip after a short delay so user sees confirmation
       setTimeout(() => {
@@ -249,7 +249,7 @@ export const ChallengeEditor: React.FC = () => {
         setReportDetails('');
         setReportReason('wrong_answer');
         handleSkipQuestion();
-      }, 1800);
+      }, 1200);
     } catch (err) {
       setOutput(`❌ Could not submit report: ${err instanceof Error ? err.message : 'Unknown error'}`);
       setIsReportOpen(false);
@@ -265,7 +265,7 @@ export const ChallengeEditor: React.FC = () => {
       const firstUncompleted = subLevels.findIndex(s => !profile.completedNodeIds.includes(s.id));
       targetIdx = firstUncompleted >= 0 ? firstUncompleted + 1 : 1;
     }
-    const finalIdx = Math.max(1, Math.min(TOTAL_QUESTIONS, targetIdx || 1));
+    const finalIdx = Math.max(1, Math.min(totalQuestions, targetIdx || 1));
     setSubLevelIdx(finalIdx);
     generateChallenge(selectedLanguage, finalIdx);
   }, [activeNode?.id, activeSubLevelIdx]);
@@ -636,7 +636,7 @@ export const ChallengeEditor: React.FC = () => {
                   fontSize: '12px', color: 'var(--text-muted)'
                 }}>
                   <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{challenge?.title}</span>
-                  <span style={{ marginLeft: 8 }}>· Q{subLevelIdx} of {TOTAL_QUESTIONS}</span>
+                  <span style={{ marginLeft: 8 }}>· Q{subLevelIdx} of {totalQuestions}</span>
                 </div>
 
                 {/* Reason selector */}
@@ -847,6 +847,15 @@ export const ChallengeEditor: React.FC = () => {
             >
               <AlertTriangle size={14} />
               <span className="hide-mobile">Report</span>
+            </button>
+            <button
+              onClick={handleSkipQuestion}
+              disabled={isExecuting || isLoadingChallenge}
+              className="btn-secondary"
+              title="Skip to next question"
+            >
+              <SkipForward size={14} />
+              <span className="hide-mobile">Skip</span>
             </button>
             <button onClick={handleSwapChallenge} disabled={isSwapping || isExecuting} className="btn-secondary" title="Try an alternate question for this node">
               {isSwapping ? <Loader size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <RotateCcw size={14} />}

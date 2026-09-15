@@ -90,7 +90,7 @@ class ApiClient {
     return headers;
   }
 
-  private async fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
+  public async fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
     options.headers = this.getHeaders();
     let res = await fetch(url, options);
 
@@ -170,6 +170,22 @@ class ApiClient {
     } catch (err) {
       return null;
     }
+  }
+
+  async reportChallenge(data: {
+    challenge_id: string;
+    challenge_title: string;
+    node_id: string;
+    sub_level_index: number;
+    reason: string;
+    details?: string | null;
+  }) {
+    const res = await this.fetchWithAuth(`${API_BASE_URL}/challenges/report`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error(`Server error ${res.status}`);
+    return await res.json();
   }
 
   // --- Auth Methods ---
