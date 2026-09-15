@@ -432,11 +432,7 @@ async def report_challenge(
     await db.refresh(report)
 
     logger.info(
-        "challenge_reported",
-        report_id=str(report.id),
-        challenge_id=req.challenge_id,
-        reason=req.reason,
-        user_id=str(current_user.id),
+        f"challenge_reported report_id={report.id} challenge_id={req.challenge_id} reason={req.reason} user_id={current_user.id}"
     )
 
     return {
